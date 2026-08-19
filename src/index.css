@@ -1,0 +1,243 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: #0066cc;
+    --primary-focus: #0071e3;
+    --primary-on-dark: #2997ff;
+    --ink: #1d1d1f;
+    --canvas: #ffffff;
+    --canvas-parchment: #f5f5f7;
+    --surface-pearl: #fafafc;
+    --surface-tile-1: #272729;
+    --surface-tile-2: #2a2a2c;
+    --surface-tile-3: #252527;
+    --surface-black: #000000;
+    
+    /* Global fallback classes */
+    --background: #ffffff;
+    --foreground: #1d1d1f;
+  }
+
+  /* HTML Base styling snaps to design rules */
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "ss03" on; /* Approximates SF Pro's rounded 'a' in Inter */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* SF Pro Display headings are tight and semi-bold */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "SF Pro Display", "Inter", system-ui, -apple-system, sans-serif;
+    font-weight: 600;
+  }
+
+  /* Custom keyboard focus outline */
+  button:focus-visible, a:focus-visible, input:focus-visible {
+    outline: 2px solid var(--primary-focus);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* Typography Scale */
+  .text-hero-display {
+    font-family: "SF Pro Display", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 56px;
+    font-weight: 600;
+    line-height: 1.07;
+    letter-spacing: -0.28px;
+  }
+  .text-display-lg {
+    font-family: "SF Pro Display", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 40px;
+    font-weight: 600;
+    line-height: 1.10;
+    letter-spacing: -0.01em;
+  }
+  .text-display-md {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 34px;
+    font-weight: 600;
+    line-height: 1.47;
+    letter-spacing: -0.374px;
+  }
+  .text-lead {
+    font-family: "SF Pro Display", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 28px;
+    font-weight: 400;
+    line-height: 1.14;
+    letter-spacing: 0.196px;
+  }
+  .text-lead-airy {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 24px;
+    font-weight: 300;
+    line-height: 1.5;
+    letter-spacing: 0;
+  }
+  .text-tagline {
+    font-family: "SF Pro Display", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.19;
+    letter-spacing: 0.231px;
+  }
+  .text-body-strong {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.24;
+    letter-spacing: -0.374px;
+  }
+  .text-body-spec {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1.44; /* Inter substitute adjustment from 1.47 */
+    letter-spacing: -0.374px;
+  }
+  .text-dense-link {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 2.41;
+    letter-spacing: 0;
+  }
+  .text-caption-spec {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.43;
+    letter-spacing: -0.224px;
+  }
+  .text-caption-strong {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.29;
+    letter-spacing: -0.224px;
+  }
+  .text-button-large {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 18px;
+    font-weight: 300;
+    line-height: 1.0;
+    letter-spacing: 0;
+  }
+  .text-button-utility {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.29;
+    letter-spacing: -0.224px;
+  }
+  .text-fine-print {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.0;
+    letter-spacing: -0.12px;
+  }
+  .text-micro-legal {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.3;
+    letter-spacing: -0.08px;
+  }
+  .text-nav-link {
+    font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.0;
+    letter-spacing: -0.12px;
+  }
+
+  /* Responsive font scaling for display headings */
+  @screen lg {
+    .text-responsive-hero {
+      @apply text-hero-display;
+    }
+  }
+  @screen md {
+    .text-responsive-hero {
+      @apply text-display-lg;
+    }
+  }
+  .text-responsive-hero {
+    font-size: 34px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  /* Buttons & CTAs Interaction Grammars */
+  .apple-btn-primary {
+    @apply text-body-spec bg-primary text-white rounded-pill px-[22px] py-[11px] inline-flex items-center justify-center font-normal transition-all duration-150 select-none;
+  }
+  .apple-btn-primary:active {
+    transform: scale(0.95);
+  }
+
+  .apple-btn-secondary {
+    @apply text-body-spec bg-transparent text-primary border border-primary rounded-pill px-[22px] py-[11px] inline-flex items-center justify-center font-normal transition-all duration-150 select-none;
+  }
+  .apple-btn-secondary:active {
+    transform: scale(0.95);
+  }
+
+  .apple-btn-dark-utility {
+    @apply text-button-utility bg-ink text-white rounded-sm px-[15px] py-[8px] inline-flex items-center justify-center font-normal transition-all duration-150 select-none;
+  }
+  .apple-btn-dark-utility:active {
+    transform: scale(0.95);
+  }
+
+  .apple-btn-pearl {
+    @apply text-caption-spec bg-surface-pearl text-ink-muted80 border-3 border-divider-soft rounded-md px-[14px] py-[8px] inline-flex items-center justify-center font-normal transition-all duration-150 select-none;
+    border-style: solid;
+  }
+  .apple-btn-pearl:active {
+    transform: scale(0.95);
+  }
+
+  .apple-btn-icon-circular {
+    @apply w-[44px] h-[44px] bg-surface-chip text-ink rounded-full inline-flex items-center justify-center transition-all duration-150 select-none;
+  }
+  .apple-btn-icon-circular:active {
+    transform: scale(0.95);
+  }
+
+  .apple-text-link {
+    @apply text-primary hover:underline inline-flex items-center gap-[4px] transition-all;
+  }
+  .apple-text-link-on-dark {
+    @apply text-primary-dark hover:underline inline-flex items-center gap-[4px] transition-all;
+  }
+}
+
+/* Custom Scrollbar Snapped to Apple Aesthetic */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--canvas);
+}
+::-webkit-scrollbar-thumb {
+  background: #d2d2d7;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a6;
+}
