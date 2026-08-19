@@ -9,21 +9,67 @@ import {
   Search, 
   ShoppingBag,
   ExternalLink,
-  Laptop
+  Laptop,
+  AlertCircle
 } from 'lucide-react'
 
 function App() {
   const [selectedConfig, setSelectedConfig] = useState<'firebase' | 'script' | 'sheet'>('firebase')
   const [setupRunning, setSetupRunning] = useState(false)
   const [setupCompleted, setSetupCompleted] = useState(false)
+  const [setupError, setSetupError] = useState<string | null>(null)
+  const [spreadsheetId, setSpreadsheetId] = useState<string | null>(null)
 
-  const runMockSetup = () => {
+  const runSetup = async () => {
     if (setupRunning || setupCompleted) return
     setSetupRunning(true)
-    setTimeout(() => {
+    setSetupError(null)
+    
+    const appsScriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL
+    
+    // Check if it's the default mock URL
+    if (!appsScriptUrl || appsScriptUrl.includes('mock-deployment-id')) {
+      console.warn("No real VITE_APPS_SCRIPT_URL set. Running in offline mock mode.")
+      setTimeout(() => {
+        setSetupRunning(false)
+        setSetupCompleted(true)
+      }, 2000)
+      return
+    }
+
+    try {
+      // Send standard action structure to route system.setup
+      const response = await fetch(appsScriptUrl, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8' // Prevent CORS preflight issue with Google Apps Script
+        },
+        body: JSON.stringify({
+          action: 'system.setup',
+          payload: {}
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (result.status === 'success') {
+        setSetupCompleted(true)
+        if (result.data && result.data.spreadsheetId) {
+          setSpreadsheetId(result.data.spreadsheetId)
+        }
+      } else {
+        setSetupError(result.error?.message || 'Server error occurred during Google Sheets setup.')
+      }
+    } catch (err: any) {
+      console.error("Setup connection error:", err)
+      setSetupError(`Failed to connect to Google Apps Script: ${err.message}`)
+    } finally {
       setSetupRunning(false)
-      setSetupCompleted(true)
-    }, 2500)
+    }
   }
 
   return (
@@ -116,13 +162,24 @@ function App() {
                   </div>
                   <div className="space-y-xxs">
                     <span className="text-fine-print text-ink-muted48 uppercase tracking-wider font-semibold">Firebase Project</span>
-                    <h3 className="text-tagline font-bold text-ink">nexus-crm-656</h3>
+                    <h3 className="text-tagline font-bold text-ink">{import.meta.env.VITE_FIREBASE_PROJECT_ID || 'nexus-crm-656'}</h3>
                   </div>
                   <div className="space-y-xxs">
                     <span className="text-fine-print text-ink-muted48 uppercase tracking-wider font-semibold">Target Document</span>
-                    <h3 className="text-tagline font-bold text-ink text-primary flex items-center gap-1 cursor-pointer">
-                      NEXUS CRM 2026–27 <ExternalLink className="w-3.5 h-3.5" />
-                    </h3>
+                    {spreadsheetId ? (
+                      <a 
+                        href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-tagline font-bold text-primary flex items-center gap-1 cursor-pointer hover:underline"
+                      >
+                        NEXUS CRM 2026–27 <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    ) : (
+                      <h3 className="text-tagline font-bold text-ink-muted48 flex items-center gap-1">
+                        NEXUS CRM 2026–27
+                      </h3>
+                    )}
                   </div>
                 </div>
 
@@ -168,7 +225,7 @@ function App() {
             </p>
 
             <button 
-              onClick={runMockSetup}
+              onClick={runSetup}
               disabled={setupRunning || setupCompleted}
               className={`w-full py-2.5 px-4 rounded-pill text-body-spec font-medium transition-all duration-200 ${
                 setupCompleted 
@@ -181,10 +238,32 @@ function App() {
               {setupCompleted ? '✓ Schema Setup Successfully Completed' : setupRunning ? 'Executing Builder Script...' : 'Run setupNexusSpreadsheet()'}
             </button>
 
+            {setupError && (
+              <div className="bg-red-950/30 border border-red-500/20 rounded-md p-sm text-xs text-red-400 space-y-1 flex items-start gap-1">
+                <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold">Setup Failed</p>
+                  <p>{setupError}</p>
+                </div>
+              </div>
+            )}
+
             {setupCompleted && (
               <div className="bg-green-950/30 border border-green-500/20 rounded-md p-sm text-xs text-green-400 space-y-1">
                 <p className="font-semibold flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Operations Complete</p>
-                <p>21 sheets initialized successfully. Primary keys, headers, and validation dropdown structures linked.</p>
+                <p>22 tabs initialized successfully. Primary keys, headers, and validation dropdown structures linked.</p>
+                {spreadsheetId && (
+                  <p className="pt-1">
+                    <a 
+                      href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="text-primary-dark hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      Open Target Spreadsheet <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -271,7 +350,7 @@ function App() {
                   <span className="text-fine-print text-primary font-semibold uppercase">API KEY</span>
                   <h3 className="text-body-strong text-ink">Authentication Core</h3>
                   <code className="block p-xs bg-canvas-parchment rounded-sm text-[12px] text-ink-muted80 truncate font-mono">
-                    AIzaSyD12jcZsYKox3...
+                    {import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyD12jcZsYKox3...'}
                   </code>
                   <p className="text-caption-spec text-ink-muted48">Resolved public identifier for Google Cloud Firebase gateway.</p>
                 </div>
@@ -279,7 +358,7 @@ function App() {
                   <span className="text-fine-print text-primary font-semibold uppercase">AUTH DOMAIN</span>
                   <h3 className="text-body-strong text-ink">OAuth Handshake Client</h3>
                   <code className="block p-xs bg-canvas-parchment rounded-sm text-[12px] text-ink-muted80 truncate font-mono">
-                    nexus-crm-656.firebaseapp.com
+                    {import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'nexus-crm-656.firebaseapp.com'}
                   </code>
                   <p className="text-caption-spec text-ink-muted48">Secure redirect authorization domain for user logins.</p>
                 </div>
@@ -287,7 +366,7 @@ function App() {
                   <span className="text-fine-print text-primary font-semibold uppercase">PROJECT ID</span>
                   <h3 className="text-body-strong text-ink">Firebase Workspace Link</h3>
                   <code className="block p-xs bg-canvas-parchment rounded-sm text-[12px] text-ink-muted80 truncate font-mono">
-                    nexus-crm-656
+                    {import.meta.env.VITE_FIREBASE_PROJECT_ID || 'nexus-crm-656'}
                   </code>
                   <p className="text-caption-spec text-ink-muted48">Target server-side environment for custom permission verification.</p>
                 </div>
@@ -300,7 +379,7 @@ function App() {
                   <span className="text-fine-print text-primary font-semibold uppercase">API ENTRYPOINT</span>
                   <h3 className="text-body-strong text-ink">Web App doPost() URL</h3>
                   <code className="block p-xs bg-canvas-parchment rounded-sm text-[12px] text-ink-muted80 truncate font-mono">
-                    https://script.google.com/macros/s/mock-deployment-id/exec
+                    {import.meta.env.VITE_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/mock-deployment-id/exec'}
                   </code>
                   <p className="text-caption-spec text-ink-muted48">All client-server commands tunnel through this main endpoint.</p>
                 </div>
@@ -329,7 +408,7 @@ function App() {
                   <span className="text-fine-print text-primary font-semibold uppercase">TARGET SCHEMA</span>
                   <h3 className="text-body-strong text-ink">NEXUS CRM — 2026–27</h3>
                   <code className="block p-xs bg-canvas-parchment rounded-sm text-[12px] text-ink-muted80 truncate font-mono">
-                    SPREADSHEET_ID (Config.gs)
+                    {spreadsheetId || 'PENDING INITIALIZATION'}
                   </code>
                   <p className="text-caption-spec text-ink-muted48">The global single-sheet database for operations storage.</p>
                 </div>
@@ -343,9 +422,9 @@ function App() {
                 </div>
                 <div className="bg-canvas border border-hairline rounded-lg p-lg space-y-sm hover:border-primary/40 transition">
                   <span className="text-fine-print text-primary font-semibold uppercase">TAB DENSITY</span>
-                  <h3 className="text-body-strong text-ink">21 Sheets Setup</h3>
+                  <h3 className="text-body-strong text-ink">22 Tabs Setup</h3>
                   <code className="block p-xs bg-canvas-parchment rounded-sm text-[12px] text-ink-muted80 truncate font-mono">
-                    config, dropdowns, staff, logs...
+                    00_Settings, 01_Users, 02_Teams, 03_Events...
                   </code>
                   <p className="text-caption-spec text-ink-muted48">Complete operations ledger representing the schema framework.</p>
                 </div>
