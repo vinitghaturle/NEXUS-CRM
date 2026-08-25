@@ -552,88 +552,146 @@ export const EventsPage: React.FC = () => {
               description="Click the 'Establish Event' button above to create your first operational event." 
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-hairline bg-canvas-parchment/40 text-ink-muted48 font-semibold uppercase tracking-wider select-none">
-                    <th className="py-md px-lg font-semibold">Event ID</th>
-                    <th className="py-md px-lg font-semibold">Name</th>
-                    <th className="py-md px-lg font-semibold">Category</th>
-                    <th className="py-md px-lg font-semibold">Date</th>
-                    <th className="py-md px-lg font-semibold">Venue</th>
-                    <th className="py-md px-lg font-semibold">Lead Team</th>
-                    <th className="py-md px-lg font-semibold">Status</th>
-                    <th className="py-md px-lg font-semibold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-hairline">
-                  {events.map((event) => {
-                    const teamName = teams.find(t => t.teamId === event.leadTeamId)?.teamName || 'Unassigned';
-                    const eventTasks = tasks.filter(t => t.eventId === event.eventId);
-                    const health = getEventHealth(eventTasks);
-                    
-                    return (
-                      <tr key={event.eventId} className="hover:bg-canvas-parchment/20 transition-colors">
-                        <td className="py-md px-lg font-mono text-[11px] text-ink-muted48 font-bold">{event.eventId}</td>
-                        <td className="py-md px-lg font-bold text-ink truncate max-w-[200px]" title={event.eventName}>
-                          {event.eventName}
-                        </td>
-                        <td className="py-md px-lg">
-                          <span className={`px-xs py-[2px] text-[10px] font-semibold border rounded-sm tracking-wider uppercase ${getCategoryColor(event.eventCategory)}`}>
-                            {event.eventCategory || 'EVENT'}
-                          </span>
-                        </td>
-                        <td className="py-md px-lg font-mono text-ink-muted80">
-                          {event.eventDate ? new Date(event.eventDate).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '-'}
-                        </td>
-                        <td className="py-md px-lg text-ink-muted80 truncate max-w-[120px]" title={event.venue}>
-                          {event.venue || 'TBD'}
-                        </td>
-                        <td className="py-md px-lg text-ink-muted80 truncate max-w-[120px]">{teamName}</td>
-                        <td className="py-md px-lg">
-                          <span className={`px-[8px] py-[3px] text-[10px] font-semibold rounded-pill ${getStatusColor(event.eventStatus)}`}>
-                            {event.eventStatus}
-                          </span>
-                        </td>
-                        <td className="py-md px-lg text-right">
-                          <div className="flex items-center justify-end gap-xs">
-                            <span className="text-[10px]">{health.dot}</span>
-                            <button
-                              onClick={() => setSelectedEvent(event)}
-                              className="text-[11px] font-semibold text-primary hover:underline px-xs"
-                            >
-                              Command Center
-                            </button>
-                            {canManageEvents && (
-                              <button
-                                onClick={() => {
-                                  setEditingEvent(event);
-                                  setIsEditOpen(true);
-                                }}
-                                className="inline-flex p-xxs text-ink-muted48 hover:text-primary hover:bg-primary/5 rounded-md transition"
-                                title="Edit Event Details"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                            {event.driveFolderUrl && (
-                              <a 
-                                href={event.driveFolderUrl} 
-                                target="_blank" 
-                                rel="noreferrer" 
-                                className="inline-flex p-xxs text-ink-muted48 hover:text-primary hover:bg-primary/5 rounded-md"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                              </a>
-                            )}
+            <>
+              {/* Mobile card list (hidden on sm+) */}
+              <div className="sm:hidden divide-y divide-hairline">
+                {events.map((event) => {
+                  const teamName = teams.find(t => t.teamId === event.leadTeamId)?.teamName || 'Unassigned';
+                  const eventTasks = tasks.filter(t => t.eventId === event.eventId);
+                  const health = getEventHealth(eventTasks);
+                  return (
+                    <div key={event.eventId} className="p-md space-y-xs">
+                      <div className="flex items-start justify-between gap-sm">
+                        <div className="space-y-xxs min-w-0">
+                          <span className="text-[10px] font-mono text-ink-muted32">{event.eventId}</span>
+                          <div className="font-bold text-ink text-[14px] leading-tight">{event.eventName}</div>
+                          <div className="flex flex-wrap gap-xs">
+                            <span className={`px-xs py-[2px] text-[9px] font-semibold border rounded-sm tracking-wider uppercase ${getCategoryColor(event.eventCategory)}`}>
+                              {event.eventCategory || 'EVENT'}
+                            </span>
+                            <span className={`px-[7px] py-[2px] text-[9px] font-semibold rounded-pill ${getStatusColor(event.eventStatus)}`}>
+                              {event.eventStatus}
+                            </span>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                        <span className="text-[16px] shrink-0">{health.dot}</span>
+                      </div>
+                      <div className="text-[12px] text-ink-muted48 space-y-[3px]">
+                        {event.eventDate && <div>📅 {new Date(event.eventDate).toLocaleDateString('en-IN', { dateStyle: 'medium' })}</div>}
+                        {event.venue && <div>📍 {event.venue}</div>}
+                        <div>👥 {teamName}</div>
+                      </div>
+                      <div className="flex items-center gap-sm pt-xxs">
+                        <button
+                          onClick={() => setSelectedEvent(event)}
+                          className="flex-1 text-center text-[12px] font-semibold text-primary border border-primary/30 py-[7px] rounded-md hover:bg-primary/5 transition"
+                        >
+                          Command Center
+                        </button>
+                        {canManageEvents && (
+                          <button
+                            onClick={() => { setEditingEvent(event); setIsEditOpen(true); }}
+                            className="p-[9px] text-ink-muted48 hover:text-primary border border-hairline rounded-md hover:bg-primary/5 transition"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {event.driveFolderUrl && (
+                          <a href={event.driveFolderUrl} target="_blank" rel="noreferrer"
+                            className="p-[9px] text-ink-muted48 hover:text-primary border border-hairline rounded-md hover:bg-primary/5 transition">
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop table (hidden on mobile) */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left text-[13px]">
+                  <thead>
+                    <tr className="border-b border-hairline bg-canvas-parchment/40 text-ink-muted48 font-semibold uppercase tracking-wider select-none">
+                      <th className="py-md px-lg font-semibold">Event ID</th>
+                      <th className="py-md px-lg font-semibold">Name</th>
+                      <th className="py-md px-lg font-semibold">Category</th>
+                      <th className="py-md px-lg font-semibold">Date</th>
+                      <th className="py-md px-lg font-semibold">Venue</th>
+                      <th className="py-md px-lg font-semibold">Lead Team</th>
+                      <th className="py-md px-lg font-semibold">Status</th>
+                      <th className="py-md px-lg font-semibold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-hairline">
+                    {events.map((event) => {
+                      const teamName = teams.find(t => t.teamId === event.leadTeamId)?.teamName || 'Unassigned';
+                      const eventTasks = tasks.filter(t => t.eventId === event.eventId);
+                      const health = getEventHealth(eventTasks);
+                      
+                      return (
+                        <tr key={event.eventId} className="hover:bg-canvas-parchment/20 transition-colors">
+                          <td className="py-md px-lg font-mono text-[11px] text-ink-muted48 font-bold">{event.eventId}</td>
+                          <td className="py-md px-lg font-bold text-ink truncate max-w-[200px]" title={event.eventName}>
+                            {event.eventName}
+                          </td>
+                          <td className="py-md px-lg">
+                            <span className={`px-xs py-[2px] text-[10px] font-semibold border rounded-sm tracking-wider uppercase ${getCategoryColor(event.eventCategory)}`}>
+                              {event.eventCategory || 'EVENT'}
+                            </span>
+                          </td>
+                          <td className="py-md px-lg font-mono text-ink-muted80">
+                            {event.eventDate ? new Date(event.eventDate).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '-'}
+                          </td>
+                          <td className="py-md px-lg text-ink-muted80 truncate max-w-[120px]" title={event.venue}>
+                            {event.venue || 'TBD'}
+                          </td>
+                          <td className="py-md px-lg text-ink-muted80 truncate max-w-[120px]">{teamName}</td>
+                          <td className="py-md px-lg">
+                            <span className={`px-[8px] py-[3px] text-[10px] font-semibold rounded-pill ${getStatusColor(event.eventStatus)}`}>
+                              {event.eventStatus}
+                            </span>
+                          </td>
+                          <td className="py-md px-lg text-right">
+                            <div className="flex items-center justify-end gap-xs">
+                              <span className="text-[10px]">{health.dot}</span>
+                              <button
+                                onClick={() => setSelectedEvent(event)}
+                                className="text-[11px] font-semibold text-primary hover:underline px-xs"
+                              >
+                                Command Center
+                              </button>
+                              {canManageEvents && (
+                                <button
+                                  onClick={() => {
+                                    setEditingEvent(event);
+                                    setIsEditOpen(true);
+                                  }}
+                                  className="inline-flex p-xxs text-ink-muted48 hover:text-primary hover:bg-primary/5 rounded-md transition"
+                                  title="Edit Event Details"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {event.driveFolderUrl && (
+                                <a 
+                                  href={event.driveFolderUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="inline-flex p-xxs text-ink-muted48 hover:text-primary hover:bg-primary/5 rounded-md"
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </a>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -699,19 +757,19 @@ export const EventsPage: React.FC = () => {
                 return (
                   <div 
                     key={dateStr}
-                    className={`min-h-[110px] p-xs flex flex-col justify-between hover:bg-canvas-parchment/10 transition-colors ${
+                    className={`min-h-[60px] sm:min-h-[100px] p-[3px] sm:p-xs flex flex-col hover:bg-canvas-parchment/10 transition-colors ${
                       isToday ? 'bg-primary/5 border-primary/20' : ''
                     }`}
                   >
-                    <span className={`text-[12px] font-mono font-semibold select-none ${
+                    <span className={`text-[10px] sm:text-[12px] font-mono font-semibold select-none ${
                       isToday 
-                        ? 'w-[22px] h-[22px] rounded-full bg-primary text-white flex items-center justify-center'
+                        ? 'w-[18px] h-[18px] sm:w-[22px] sm:h-[22px] rounded-full bg-primary text-white flex items-center justify-center text-[9px] sm:text-[12px]'
                         : 'text-ink-muted48'
                     }`}>
                       {cellDate.getDate()}
                     </span>
 
-                    <div className="flex-1 space-y-[4px] pt-xs overflow-y-auto max-h-[80px] scrollbar-none">
+                    <div className="flex-1 space-y-[2px] pt-[2px] overflow-y-auto max-h-[50px] sm:max-h-[80px] scrollbar-none">
                       {dayEvents.map(ev => (
                         <div 
                           key={ev.eventId}

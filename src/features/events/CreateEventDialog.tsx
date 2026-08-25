@@ -113,8 +113,8 @@ export const CreateEventDialog: React.FC<CreateEventDialogProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-center justify-center p-md select-none font-text text-ink">
-      <div className="bg-canvas border border-hairline rounded-lg shadow-product-surface max-w-[640px] w-full p-lg space-y-md animate-scale-up text-left max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-md select-none font-text text-ink">
+      <div className="bg-canvas border border-hairline rounded-t-xl sm:rounded-lg shadow-product-surface max-w-[640px] w-full p-md sm:p-lg space-y-md animate-scale-up text-left max-h-[92dvh] overflow-y-auto">
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-hairline pb-xs">

@@ -224,6 +224,14 @@
   .apple-text-link-on-dark {
     @apply text-primary-dark hover:underline inline-flex items-center gap-[4px] transition-all;
   }
+
+  /* PWA Safe Area Utilities */
+  .safe-area-pb {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  .safe-area-pt {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
 }
 
 /* Custom Scrollbar Snapped to Apple Aesthetic */

@@ -251,7 +251,7 @@ export const AppShell: React.FC = () => {
       {/* 1. TOP NAVBAR (Sticky, 56px height) */}
       <header className="h-[56px] bg-canvas border-b border-hairline sticky top-0 z-40 flex items-center justify-between px-lg select-none">
         <div className="flex items-center gap-md">
-          {/* Mobile hamburger toggle */}
+          {/* Mobile hamburger toggle — shows full sidebar drawer */}
           <button 
             onClick={toggleMobileMenu}
             className="md:hidden p-xs text-ink-muted48 hover:text-ink hover:bg-ink-muted8 rounded-md transition"
@@ -262,7 +262,8 @@ export const AppShell: React.FC = () => {
           {/* Logo brand */}
           <span className="font-display font-bold tracking-tight text-ink flex items-center gap-xxs">
             <span className="w-4 h-4 rounded-full border-[3px] border-primary inline-block"></span>
-            NEXUS CRM
+            <span className="hidden xs:inline">NEXUS CRM</span>
+            <span className="xs:hidden">NEXUS</span>
           </span>
         </div>
 
@@ -282,7 +283,7 @@ export const AppShell: React.FC = () => {
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 mt-xs bg-canvas border border-hairline rounded-lg shadow-product-surface w-[280px] p-sm space-y-xs animate-scale-up z-50 text-left">
+              <div className="absolute right-0 mt-xs bg-canvas border border-hairline rounded-lg shadow-product-surface w-[280px] max-w-[calc(100vw-32px)] p-sm space-y-xs animate-scale-up z-50 text-left">
                 <div className="flex justify-between items-center border-b border-hairline pb-xs">
                   <span className="font-bold text-[12px]">Notifications ({notifications.length})</span>
                   <button onClick={() => setNotifOpen(false)} className="text-[11px] text-primary hover:underline">Close</button>
@@ -424,13 +425,78 @@ export const AppShell: React.FC = () => {
         )}
 
         {/* 4. MAIN BODY CONTAINER (Flex expansion, padding margins) */}
-        <main className="flex-1 bg-canvas p-lg md:p-xl overflow-x-hidden relative">
+        <main className="flex-1 bg-canvas p-md sm:p-lg md:p-xl overflow-x-hidden relative pb-[80px] md:pb-xl">
           <div className="max-w-[1200px] mx-auto animate-fade-in">
             <Outlet />
           </div>
         </main>
 
       </div>
+
+      {/* 5. MOBILE BOTTOM NAVIGATION BAR (PWA style, hidden on desktop) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-canvas border-t border-hairline z-40 flex items-center justify-around px-xs py-xs safe-area-pb">
+        <NavLink
+          to="/dashboard"
+          className={({ isActive }) =>
+            `flex flex-col items-center gap-[3px] px-sm py-xs rounded-lg transition-all min-w-[52px] ${
+              isActive ? 'text-primary' : 'text-ink-muted48 hover:text-ink'
+            }`
+          }
+        >
+          <LayoutDashboard className="w-[22px] h-[22px] stroke-[1.5]" />
+          <span className="text-[10px] font-semibold">Home</span>
+        </NavLink>
+
+        <NavLink
+          to="/events"
+          className={({ isActive }) =>
+            `flex flex-col items-center gap-[3px] px-sm py-xs rounded-lg transition-all min-w-[52px] ${
+              isActive ? 'text-primary' : 'text-ink-muted48 hover:text-ink'
+            }`
+          }
+        >
+          <CalendarDays className="w-[22px] h-[22px] stroke-[1.5]" />
+          <span className="text-[10px] font-semibold">Events</span>
+        </NavLink>
+
+        <NavLink
+          to="/tasks"
+          className={({ isActive }) =>
+            `flex flex-col items-center gap-[3px] px-sm py-xs rounded-lg transition-all min-w-[52px] relative ${
+              isActive ? 'text-primary' : 'text-ink-muted48 hover:text-ink'
+            }`
+          }
+        >
+          <KanbanSquare className="w-[22px] h-[22px] stroke-[1.5]" />
+          <span className="text-[10px] font-semibold">Tasks</span>
+        </NavLink>
+
+        {/* Teams — only visible to non-members */}
+        {!isMemberOnly && (
+          <NavLink
+            to="/teams"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-[3px] px-sm py-xs rounded-lg transition-all min-w-[52px] ${
+                isActive ? 'text-primary' : 'text-ink-muted48 hover:text-ink'
+              }`
+            }
+          >
+            <Users className="w-[22px] h-[22px] stroke-[1.5]" />
+            <span className="text-[10px] font-semibold">Teams</span>
+          </NavLink>
+        )}
+
+        {/* More — hamburger shortcut for drawer */}
+        <button
+          onClick={toggleMobileMenu}
+          className={`flex flex-col items-center gap-[3px] px-sm py-xs rounded-lg transition-all min-w-[52px] ${
+            mobileMenuOpen ? 'text-primary' : 'text-ink-muted48 hover:text-ink'
+          }`}
+        >
+          <Menu className="w-[22px] h-[22px] stroke-[1.5]" />
+          <span className="text-[10px] font-semibold">More</span>
+        </button>
+      </nav>
     </div>
   );
 };

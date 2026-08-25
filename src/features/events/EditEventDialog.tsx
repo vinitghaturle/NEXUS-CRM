@@ -76,8 +76,8 @@ export const EditEventDialog: React.FC<EditEventDialogProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-md bg-ink/40 backdrop-blur-sm animate-fade-in text-left">
-      <div className="bg-canvas border border-hairline rounded-xl shadow-product-dialog max-w-[560px] w-full max-h-[90vh] flex flex-col overflow-hidden animate-scale-up">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-md bg-ink/40 backdrop-blur-sm animate-fade-in text-left">
+      <div className="bg-canvas border border-hairline rounded-t-xl sm:rounded-xl shadow-product-dialog max-w-[560px] w-full max-h-[92dvh] flex flex-col overflow-hidden animate-scale-up">
         
         {/* Header */}
         <div className="flex items-center justify-between p-lg border-b border-hairline bg-canvas-parchment/30">

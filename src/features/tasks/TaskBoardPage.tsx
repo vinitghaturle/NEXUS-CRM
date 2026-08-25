@@ -313,77 +313,75 @@ export const TaskBoardPage: React.FC = () => {
         )}
       </div>
 
-      {/* 2. Metrics Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-sm bg-canvas-parchment/60 border border-hairline rounded-lg p-md shadow-inner-soft">
-        <div className="text-center p-sm space-y-xxs">
-          <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Total Tasks</span>
-          <h3 className="text-body-strong font-bold text-ink">{metrics.total}</h3>
-        </div>
-        <div className="text-center p-sm border-l border-hairline space-y-xxs">
-          <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Completion %</span>
-          <h3 className="text-body-strong font-bold text-green-600 flex items-center justify-center gap-[4px]">
-            <TrendingUp className="w-4 h-4" /> {metrics.completionRate}%
-          </h3>
-        </div>
-        <div className="text-center p-sm border-l border-hairline space-y-xxs">
-          <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Overdue</span>
-          <h3 className={`text-body-strong font-bold ${metrics.overdue > 0 ? 'text-red-500 font-semibold' : 'text-ink'}`}>
-            {metrics.overdue}
-          </h3>
-        </div>
-        <div className="text-center p-sm border-l border-hairline space-y-xxs">
-          <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Delayed</span>
-          <h3 className="text-body-strong font-bold text-amber-600">{metrics.delayed}</h3>
-        </div>
-        <div className="text-center p-sm border-l border-hairline space-y-xxs">
-          <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Blocked</span>
-          <h3 className="text-body-strong font-bold text-red-600">{metrics.blocked}</h3>
-        </div>
-        <div className="text-center p-sm border-l border-hairline space-y-xxs">
-          <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Completed</span>
-          <h3 className="text-body-strong font-bold text-green-700">{metrics.completed}</h3>
+      {/* 2. Metrics Strip — horizontal scroll on mobile */}
+      <div className="overflow-x-auto -mx-lg px-lg sm:mx-0 sm:px-0">
+        <div className="flex sm:grid sm:grid-cols-6 min-w-[480px] sm:min-w-0 gap-0 bg-canvas-parchment/60 border border-hairline rounded-lg shadow-inner-soft divide-x divide-hairline">
+          <div className="text-center p-sm space-y-xxs flex-1">
+            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Total</span>
+            <h3 className="text-body-strong font-bold text-ink">{metrics.total}</h3>
+          </div>
+          <div className="text-center p-sm space-y-xxs flex-1">
+            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Done %</span>
+            <h3 className="text-body-strong font-bold text-green-600 flex items-center justify-center gap-[4px]">
+              <TrendingUp className="w-3.5 h-3.5" /> {metrics.completionRate}%
+            </h3>
+          </div>
+          <div className="text-center p-sm space-y-xxs flex-1">
+            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Overdue</span>
+            <h3 className={`text-body-strong font-bold ${metrics.overdue > 0 ? 'text-red-500' : 'text-ink'}`}>
+              {metrics.overdue}
+            </h3>
+          </div>
+          <div className="text-center p-sm space-y-xxs flex-1">
+            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Delayed</span>
+            <h3 className="text-body-strong font-bold text-amber-600">{metrics.delayed}</h3>
+          </div>
+          <div className="text-center p-sm space-y-xxs flex-1">
+            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Blocked</span>
+            <h3 className="text-body-strong font-bold text-red-600">{metrics.blocked}</h3>
+          </div>
+          <div className="text-center p-sm space-y-xxs flex-1">
+            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Done</span>
+            <h3 className="text-body-strong font-bold text-green-700">{metrics.completed}</h3>
+          </div>
         </div>
       </div>
 
       {/* 3. Filters Control Bar */}
-      <div className="bg-canvas border border-hairline rounded-lg shadow-product-surface p-md flex flex-wrap items-center gap-sm">
-        
-        {/* Search */}
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-canvas border border-hairline rounded-lg shadow-product-surface p-md space-y-sm">
+        {/* Search — full width on all screens */}
+        <div className="relative">
           <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-ink-muted32">
             <Search className="w-4 h-4" />
           </span>
           <input
             type="text"
-            placeholder="Search tasks by title, desc, ID..."
+            placeholder="Search tasks..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-canvas border border-hairline rounded-md pl-[36px] pr-sm py-[8px] text-[13px] text-ink placeholder-ink-muted32 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition"
+            className="w-full bg-canvas border border-hairline rounded-md pl-[36px] pr-sm py-[9px] text-[13px] text-ink placeholder-ink-muted32 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition"
           />
         </div>
 
-        {/* Team filter (President / VP see all, Leads filter default) */}
-        <div className="flex items-center gap-[6px]">
-          <span className="text-[12px] text-ink-muted48 font-medium">Team</span>
+        {/* Filter dropdowns — wrapping flex row */}
+        <div className="flex flex-wrap items-center gap-sm">
+          {/* Team filter */}
           <select
             value={filterTeam}
             onChange={(e) => setFilterTeam(e.target.value)}
-            className="bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
+            className="flex-1 min-w-[110px] bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
           >
             <option value="">All Teams</option>
             {teams.map(t => (
               <option key={t.teamId} value={t.teamId}>{t.teamName}</option>
             ))}
           </select>
-        </div>
 
-        {/* Assignee filter */}
-        <div className="flex items-center gap-[6px]">
-          <span className="text-[12px] text-ink-muted48 font-medium">Assignee</span>
+          {/* Assignee filter */}
           <select
             value={filterAssignee}
             onChange={(e) => setFilterAssignee(e.target.value)}
-            className="bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none max-w-[160px]"
+            className="flex-1 min-w-[120px] bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
           >
             <option value="">All Members</option>
             <option value={myUserId}>Assigned to Me</option>
@@ -391,58 +389,53 @@ export const TaskBoardPage: React.FC = () => {
               <option key={u.userId} value={u.userId}>{u.name}</option>
             ))}
           </select>
-        </div>
 
-        {/* Event filter */}
-        <div className="flex items-center gap-[6px]">
-          <span className="text-[12px] text-ink-muted48 font-medium">Event</span>
+          {/* Priority filter */}
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            className="flex-1 min-w-[100px] bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
+          >
+            <option value="">All Priority</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+
+          {/* Event filter */}
           <select
             value={filterEvent}
             onChange={(e) => setFilterEvent(e.target.value)}
-            className="bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none max-w-[160px]"
+            className="flex-1 min-w-[120px] bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
           >
             <option value="">All Events</option>
             {events.map(ev => (
               <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
             ))}
           </select>
-        </div>
 
-        {/* Priority filter */}
-        <div className="flex items-center gap-[6px]">
-          <span className="text-[12px] text-ink-muted48 font-medium">Priority</span>
-          <select
-            value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
-            className="bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
-          >
-            <option value="">All</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
+          {/* Reset Filters button */}
+          {(filterTeam || filterAssignee || filterEvent || filterPriority || searchQuery) && (
+            <button 
+              onClick={() => {
+                setFilterTeam('');
+                setFilterAssignee('');
+                setFilterEvent('');
+                setFilterPriority('');
+                setSearchQuery('');
+              }}
+              className="text-[12px] text-primary font-semibold hover:underline whitespace-nowrap"
+            >
+              Reset Filters
+            </button>
+          )}
         </div>
-
-        {/* Reset Filters button */}
-        {(filterTeam || filterAssignee || filterEvent || filterPriority || searchQuery) && (
-          <button 
-            onClick={() => {
-              setFilterTeam('');
-              setFilterAssignee('');
-              setFilterEvent('');
-              setFilterPriority('');
-              setSearchQuery('');
-            }}
-            className="text-[12px] text-primary font-semibold hover:underline"
-          >
-            Reset Filters
-          </button>
-        )}
       </div>
 
-      {/* 4. Kanban lanes board */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-md overflow-x-auto pb-lg select-none">
+      {/* 4. Kanban lanes board — horizontal scroll on mobile, grid on desktop */}
+      <div className="overflow-x-auto -mx-lg px-lg sm:-mx-xl sm:px-xl md:mx-0 md:px-0 pb-lg">
+      <div className="flex md:grid md:grid-cols-3 lg:grid-cols-5 gap-md min-w-[900px] md:min-w-0 select-none snap-x snap-mandatory md:snap-none">
         {LANES.map(lane => {
           const laneTasks = filteredTasks.filter(t => t.status === lane.id);
           
@@ -451,7 +444,7 @@ export const TaskBoardPage: React.FC = () => {
               key={lane.id}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, lane.id)}
-              className="flex flex-col min-w-[220px] bg-canvas-parchment/30 border border-hairline rounded-lg shadow-inner-soft p-sm min-h-[500px]"
+              className="flex flex-col w-[240px] md:w-auto flex-shrink-0 md:flex-shrink bg-canvas-parchment/30 border border-hairline rounded-lg shadow-inner-soft p-sm min-h-[400px] snap-start"
             >
               {/* Lane Header */}
               <div className={`px-sm py-xxs border rounded-pill flex items-center justify-between font-text text-[12px] font-semibold mb-sm ${lane.color}`}>
@@ -557,6 +550,7 @@ export const TaskBoardPage: React.FC = () => {
           );
         })}
       </div>
+      </div>
 
       {/* 5. Create Task Modal */}
       {isCreateModalOpen && (
@@ -626,8 +620,8 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
   };
 
   return (
-    <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-center justify-center p-md select-none font-text text-ink">
-      <div className="bg-canvas border border-hairline rounded-lg shadow-product-surface max-w-[480px] w-full p-lg space-y-md animate-scale-up text-left">
+    <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-md select-none font-text text-ink">
+      <div className="bg-canvas border border-hairline sm:rounded-lg rounded-t-xl shadow-product-surface max-w-[480px] w-full p-lg space-y-md animate-scale-up text-left max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-hairline pb-xs">
           <h3 className="text-body-strong font-bold text-ink">Initialize Operations Task</h3>
           <button onClick={onClose} className="p-xxs hover:bg-ink-muted8 rounded-md transition">
@@ -658,7 +652,7 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
             <div className="space-y-xxs">
               <label className="font-semibold text-caption-strong">Assign Team</label>
               <select
@@ -694,7 +688,7 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
             <div className="space-y-xxs">
               <label className="font-semibold text-caption-strong">Priority</label>
               <select
@@ -720,7 +714,7 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
             <div className="space-y-xxs">
               <label className="font-semibold text-caption-strong">Target Event</label>
               <select
@@ -837,8 +831,8 @@ const EditTaskModal: React.FC<EditModalProps> = ({ task, teams, users, events, c
   };
 
   return (
-    <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-center justify-center p-md select-none font-text text-ink">
-      <div className="bg-canvas border border-hairline rounded-lg shadow-product-surface max-w-[500px] w-full p-lg space-y-md animate-scale-up text-left">
+    <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-md select-none font-text text-ink">
+      <div className="bg-canvas border border-hairline sm:rounded-lg rounded-t-xl shadow-product-surface max-w-[500px] w-full p-lg space-y-md animate-scale-up text-left max-h-[92dvh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-hairline pb-xs">
           <div className="space-y-[2px]">
             <span className="text-[10px] font-mono text-ink-muted48 uppercase">Audit Ledger Entry: {task.taskId}</span>
@@ -855,7 +849,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({ task, teams, users, events, c
           <div className="bg-canvas-parchment/30 border border-hairline rounded-md p-md space-y-sm">
             <h4 className="text-[11px] font-bold text-primary uppercase tracking-wider">Operator Update</h4>
             
-            <div className="grid grid-cols-2 gap-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
               <div className="space-y-xxs">
                 <label className="font-semibold text-caption-strong">Workflow Status</label>
                 <select
@@ -923,7 +917,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({ task, teams, users, events, c
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
               <div className="space-y-xxs">
                 <label className="font-semibold text-caption-strong">Assign Team</label>
                 <select
@@ -961,7 +955,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({ task, teams, users, events, c
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
               <div className="space-y-xxs">
                 <label className="font-semibold text-caption-strong">Priority</label>
                 <select
@@ -989,7 +983,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({ task, teams, users, events, c
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
               <div className="space-y-xxs">
                 <label className="font-semibold text-caption-strong">Target Event</label>
                 <select
