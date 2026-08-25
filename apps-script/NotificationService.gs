@@ -389,11 +389,29 @@ function isDuplicateNotification(taskId, eventType, recipientUserId) {
   return false;
 }
 
+function ensureNotificationsSheetExists() {
+  try {
+    var ss = typeof SPREADSHEET_ID !== 'undefined' && SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) return;
+    var sheet = ss.getSheetByName("22_Notifications");
+    if (!sheet) {
+      sheet = ss.insertSheet("22_Notifications");
+      var headers = ["notificationId", "eventType", "taskId", "eventId", "recipientUserId", "recipientEmail", "subject", "status", "sentAt", "errorMessage", "createdAt"];
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#1d1d1f").setFontColor("#ffffff");
+      sheet.setFrozenRows(1);
+    }
+  } catch (e) {
+    Logger.log("ensureNotificationsSheetExists error: " + e.toString());
+  }
+}
+
 /**
  * Writes an entry to the 22_Notifications sheet for administrative inspection & debugging.
  */
 function logNotificationEntry(entry) {
   try {
+    ensureNotificationsSheetExists();
     var notifRepo = new SheetRepository("22_Notifications", "NTF", "notificationId");
     notifRepo.insert({
       eventType: entry.eventType || "",
@@ -409,4 +427,25 @@ function logNotificationEntry(entry) {
   } catch (err) {
     Logger.log("Failed to write to 22_Notifications sheet: " + err.toString());
   }
+}
+
+/**
+ * Test utility function that can be executed directly inside Apps Script editor to send a sample test email.
+ */
+function testSendNotificationEmail() {
+  var sampleTask = {
+    taskId: "TSK-TEST-001",
+    taskTitle: "Design IEEE Symposium Keynote Poster",
+    taskDescription: "Create a high-resolution banner and social promo assets for keynote speaker.",
+    priority: "HIGH",
+    deadline: new Date(new Date().getTime() + 3 * 24 * 60 * 60 * 1000),
+    teamId: "TEAM-001",
+    assignedTo: "vinit.ghaturle.ds@ghrce.raisoni.net"
+  };
+
+  sendNotification("TASK_ASSIGNED", sampleTask, "vinit.ghaturle.ds@ghrce.raisoni.net", {
+    remarks: "This is a direct test of the NEXUS CRM transactional email service."
+  });
+  
+  Logger.log("Test execution completed for: vinit.ghaturle.ds@ghrce.raisoni.net");
 }
