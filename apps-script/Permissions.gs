@@ -94,8 +94,14 @@ function canUserPerform(user, action, resourceContext) {
 
     case "tasks.updateStatus":
     case "tasks.updateProgress":
-      // Both Leads and Members can update task status and progress
+    case "tasks.submitForVerification":
+      // Leads and Members can update task status/progress and submit for verification
       return role === "LEAD" || role === "MEMBER" || role === "GENERAL_MEMBER";
+
+    case "tasks.verify":
+    case "tasks.reject":
+      // Leads (plus President, VP, Admin) can verify or reject tasks
+      return role === "LEAD";
 
     case "events.create":
     case "events.update":

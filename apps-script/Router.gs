@@ -205,6 +205,15 @@ function doPost(e) {
       case "tasks.getUserWorkload":
         responseData = handleGetUserWorkload(payload.payload.targetUserId);
         break;
+      case "tasks.submitForVerification":
+        responseData = handleTaskSubmitForVerification(payload.payload.taskId, payload.payload.remarks, user.userId);
+        break;
+      case "tasks.verify":
+        responseData = handleTaskVerify(payload.payload.taskId, payload.payload.remarks, user.userId);
+        break;
+      case "tasks.reject":
+        responseData = handleTaskReject(payload.payload.taskId, payload.payload.remarks, user.userId);
+        break;
 
       // Creative Handlers
       case "creative.list":
