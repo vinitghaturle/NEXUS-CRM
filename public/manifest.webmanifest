@@ -1,0 +1,16 @@
+{
+  "short_name": "NEXUS CRM",
+  "name": "NEXUS CRM Operations Portal",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "display": "standalone",
+  "orientation": "portrait"
+}

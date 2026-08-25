@@ -88,7 +88,7 @@ function setupNexusSpreadsheet() {
     // Set headers
     sheet.getRange(1, 1, 1, columns.length).setValues([columns]);
     sheet.getRange(1, 1, 1, columns.length).setFontWeight("bold");
-    sheet.showGridlines(true);
+    sheet.setHiddenGridlines(false);
     
     // Freeze header
     sheet.setFrozenRows(1);
@@ -219,7 +219,17 @@ function seedSettings(ss) {
     ["WORKLOAD_HIGH_MAX", "10", "Maximum active tasks for HIGH workload status", "TRUE"],
     ["DEFAULT_TIMEZONE", "Asia/Kolkata", "Default system timezone", "TRUE"],
     ["ACADEMIC_SESSION", "2026-27", "Current academic session", "TRUE"],
-    ["ORGANIZATION_NAME", "NEXUS Forum", "Name of the organization", "TRUE"]
+    ["ORGANIZATION_NAME", "NEXUS Forum", "Name of the organization", "TRUE"],
+    ["PERFORMANCE_WEIGHT_TASK_COMPLETION", "0.15", "Performance weight for Task Completion Score", "TRUE"],
+    ["PERFORMANCE_WEIGHT_ON_TIME", "0.15", "Performance weight for On-Time Delivery Score", "TRUE"],
+    ["PERFORMANCE_WEIGHT_EVENT_PARTICIPATION", "0.10", "Performance weight for Event Participation Score", "TRUE"],
+    ["PERFORMANCE_WEIGHT_MEETING_ATTENDANCE", "0.10", "Performance weight for Meeting Attendance Score", "TRUE"],
+    ["PERFORMANCE_WEIGHT_INITIATIVE", "0.10", "Performance weight for Initiative Score", "TRUE"],
+    ["PERFORMANCE_WEIGHT_TEAM_COORDINATION", "0.10", "Performance weight for Team Coordination Score", "TRUE"],
+    ["PERFORMANCE_WEIGHT_RESPONSIBILITY", "0.10", "Performance weight for Responsibility Score", "TRUE"],
+    ["PERFORMANCE_WEIGHT_COMMUNICATION", "0.10", "Performance weight for Communication Score", "TRUE"],
+    ["PERFORMANCE_WEIGHT_QUALITY", "0.05", "Performance weight for Quality of Work Score", "TRUE"],
+    ["PERFORMANCE_WEIGHT_CONSISTENCY", "0.05", "Performance weight for Consistency Score", "TRUE"]
   ];
 
   var existingKeys = {};
@@ -335,7 +345,7 @@ function applyAllDropdownValidations(ss) {
     { sheet: "03_Events", col: 10, list: ["PLANNING", "UPCOMING", "ONGOING", "COMPLETED", "CANCELLED", "POSTPONED"] },
     
     { sheet: "04_Tasks", col: 9, list: ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
-    { sheet: "04_Tasks", col: 12, list: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "DELAYED", "BLOCKED"] },
+    { sheet: "04_Tasks", col: 12, list: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "DELAYED", "BLOCKED", "CANCELLED"] },
     { sheet: "04_Tasks", col: 17, list: ["TRUE", "FALSE"] },
     
     { sheet: "06_Creative", col: 9, list: ["BRIEF", "CONTENT_RECEIVED", "DESIGN_STARTED", "REVIEW", "APPROVED", "PUBLISHED"] },
