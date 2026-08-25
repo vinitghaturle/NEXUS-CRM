@@ -268,12 +268,20 @@ export const TaskBoardPage: React.FC = () => {
     return false;
   };
 
-  // Check if current user can edit administrative/detail fields (Creator, Assignee, Team Lead, Executive)
-  const canEditAdminFields = (task: Task) => {
+  // Check if current user can edit/modify task status or progress (Creator, Assignee, Team Lead, Executive)
+  const canEditTask = (task: Task) => {
     if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
     if (role === 'LEAD' && task.teamId === myTeamId) return true;
     if (task.assignedBy && task.assignedBy === myUserId) return true;
     if (task.assignedTo && task.assignedTo === myUserId) return true;
+    return false;
+  };
+
+  // Check if current user can edit administrative/detail fields (Creator, Team Lead, Executive)
+  const canEditAdminFields = (task: Task) => {
+    if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
+    if (role === 'LEAD' && task.teamId === myTeamId) return true;
+    if (task.assignedBy && task.assignedBy === myUserId) return true;
     return false;
   };
 
@@ -301,15 +309,10 @@ export const TaskBoardPage: React.FC = () => {
     const task = tasks.find(t => t.taskId === taskId);
     if (!task) return;
 
-    // Check status transition permission
-    const isAssignedToMe = task.assignedTo === myUserId;
-    const isMyTeamLead = role === 'LEAD' && task.teamId === myTeamId;
-    const isExecutive = role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN';
-
-    if (isAssignedToMe || isMyTeamLead || isExecutive) {
+    if (canEditTask(task)) {
       updateStatusMutation.mutate({ taskId, status: targetStatus });
     } else {
-      alert("Permission denied. You can only update tasks assigned to you or within your team.");
+      alert("Permission denied. You can only update tasks assigned to you, created by you, or belonging to your department.");
     }
   };
 
@@ -705,6 +708,7 @@ export const TaskBoardPage: React.FC = () => {
           users={users}
           events={events}
           myUserId={myUserId}
+          canEditTask={canEditTask(selectedTask)}
           canEditAdminFields={canEditAdminFields(selectedTask)}
           canVerifyTask={canVerifyTask(selectedTask)}
           canDeleteTask={canDeleteTask(selectedTask)}
@@ -931,6 +935,7 @@ interface EditModalProps {
   users: User[];
   events: EventItem[];
   myUserId: string;
+  canEditTask: boolean;
   canEditAdminFields: boolean;
   canVerifyTask: boolean;
   canDeleteTask: boolean;
@@ -949,6 +954,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({
   users, 
   events, 
   myUserId,
+  canEditTask,
   canEditAdminFields, 
   canVerifyTask,
   canDeleteTask,
@@ -1066,6 +1072,13 @@ const EditTaskModal: React.FC<EditModalProps> = ({
           </button>
         </div>
 
+        {/* 🔒 Read-Only Notice if user cannot edit */}
+        {!canEditTask && (
+          <div className="p-sm bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-900 flex items-center gap-xs animate-fade-in">
+            <span>🔒 <strong>Read-Only View:</strong> This task belongs to another department ({teams.find(t => t.teamId === task.teamId)?.teamName || 'another team'}). You do not have permission to modify its status or parameters.</span>
+          </div>
+        )}
+
         {/* 🚨 Rejection Feedback Banner if changes requested */}
         {isRejected && task.rejectionRemarks && (
           <div className="p-md bg-red-50 border border-red-200 rounded-lg space-y-xxs animate-fade-in text-red-800">
@@ -1120,7 +1133,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({
         )}
 
         {/* 🚀 Submit for Verification Button for Task Owner */}
-        {(!isUnderVerification && task.status !== 'COMPLETED') && (isOwner || canEditAdminFields) && (
+        {canEditTask && (!isUnderVerification && task.status !== 'COMPLETED') && (isOwner || canEditAdminFields) && (
           <div className="p-sm bg-blue-50/60 border border-blue-200 rounded-lg flex items-center justify-between gap-sm">
             <div className="space-y-[2px]">
               <span className="text-[12px] font-bold text-blue-900">Finished your deliverables?</span>
@@ -1238,9 +1251,10 @@ const EditTaskModal: React.FC<EditModalProps> = ({
               <div className="space-y-xxs">
                 <label className="font-semibold text-caption-strong">Workflow Status</label>
                 <select
+                  disabled={!canEditTask}
                   value={status}
                   onChange={(e) => handleStatusChange(e.target.value)}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
+                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
                 >
                   <option value="NOT_STARTED">Not Started</option>
                   <option value="IN_PROGRESS">In Progress</option>
@@ -1258,9 +1272,10 @@ const EditTaskModal: React.FC<EditModalProps> = ({
                   min="0"
                   max="100"
                   step="5"
+                  disabled={!canEditTask}
                   value={progress}
                   onChange={(e) => handleProgressChange(Number(e.target.value))}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none font-mono"
+                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none font-mono"
                 />
               </div>
             </div>
@@ -1270,9 +1285,10 @@ const EditTaskModal: React.FC<EditModalProps> = ({
               <div className="space-y-xxs bg-purple-50/50 p-xs rounded-md border border-purple-200">
                 <label className="font-semibold text-caption-strong text-purple-900">Assigned Verifier (Approver)</label>
                 <select
+                  disabled={!canEditAdminFields}
                   value={verifier}
                   onChange={(e) => setVerifier(e.target.value)}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
+                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
                 >
                   <option value="">Default (Task Assigner / Lead)</option>
                   {users.map(u => (
@@ -1288,11 +1304,12 @@ const EditTaskModal: React.FC<EditModalProps> = ({
               <label className="font-semibold text-caption-strong">Operator Activity Remarks *</label>
               <input
                 type="text"
-                required
-                placeholder="Remarks are required to commit status changes..."
+                required={canEditTask}
+                disabled={!canEditTask}
+                placeholder={canEditTask ? "Remarks are required to commit status changes..." : "No remarks."}
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
+                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
               />
             </div>
           </div>
@@ -1456,20 +1473,32 @@ const EditTaskModal: React.FC<EditModalProps> = ({
             </div>
 
             <div className="flex items-center gap-sm">
-              <button
-                type="button"
-                onClick={onClose}
-                className="apple-btn-secondary py-[8px] px-md select-none active:scale-[0.98] transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="apple-btn-primary py-[8px] px-lg select-none active:scale-[0.98] transition"
-              >
-                Commit Changes
-              </button>
+              {canEditTask ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="apple-btn-secondary py-[8px] px-md select-none active:scale-[0.98] transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="apple-btn-primary py-[8px] px-lg select-none active:scale-[0.98] transition"
+                  >
+                    Commit Changes
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="apple-btn-secondary py-[8px] px-lg select-none active:scale-[0.98] transition font-medium"
+                >
+                  Close
+                </button>
+              )}
             </div>
           </div>
         </form>

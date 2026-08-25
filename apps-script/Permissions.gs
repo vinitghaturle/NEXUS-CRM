@@ -112,8 +112,12 @@ function canUserPerform(user, action, resourceContext) {
       return role === "LEAD";
 
     case "tasks.update":
-      if (role === "LEAD") return true;
-      // Task can be edited by the creator (assignedBy) or the assignee (assignedTo)
+    case "tasks.updateStatus":
+    case "tasks.updateProgress":
+    case "tasks.submitForVerification":
+      // A Lead can only update tasks in their own department
+      if (role === "LEAD" && resourceContext && resourceContext.teamId === teamId) return true;
+      // The task creator (assignedBy) or assigned operator (assignedTo) can update
       if (resourceContext) {
         if (resourceContext.assignedBy === userId) return true;
         if (resourceContext.assignedTo === userId) return true;
@@ -125,16 +129,14 @@ function canUserPerform(user, action, resourceContext) {
       if (resourceContext && resourceContext.assignedBy === userId) return true;
       return false;
 
-    case "tasks.updateStatus":
-    case "tasks.updateProgress":
-    case "tasks.submitForVerification":
-      // Leads and Members can update task status/progress and submit for verification
-      return role === "LEAD" || role === "MEMBER" || role === "GENERAL_MEMBER";
-
     case "tasks.verify":
     case "tasks.reject":
-      // Leads (plus President, VP, Admin) can verify or reject tasks
-      return role === "LEAD";
+      // Leads for their own team, designated verifier, or task creator
+      if (role === "LEAD" && resourceContext && resourceContext.teamId === teamId) return true;
+      if (resourceContext) {
+        if (resourceContext.verifierId === userId || resourceContext.assignedBy === userId) return true;
+      }
+      return false;
 
     case "events.create":
     case "events.update":
