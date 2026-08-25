@@ -52,6 +52,7 @@ interface User {
   email: string;
   role: string;
   teamId: string;
+  position?: string;
   phone?: string;
 }
 
@@ -206,8 +207,8 @@ export const TaskBoardPage: React.FC = () => {
 
   // Mutate Submit for Verification
   const submitVerificationMutation = useMutation({
-    mutationFn: ({ taskId, remarks }: { taskId: string; remarks?: string }) =>
-      callApi('tasks.submitForVerification', { taskId, remarks: remarks || 'Submitted for verification.' }),
+    mutationFn: ({ taskId, remarks, verifierId }: { taskId: string; remarks?: string; verifierId?: string }) =>
+      callApi('tasks.submitForVerification', { taskId, verifierId, remarks: remarks || 'Submitted for verification.' }),
     onSuccess: () => {
       setIsEditModalOpen(false);
       setSelectedTask(null);
@@ -684,7 +685,7 @@ export const TaskBoardPage: React.FC = () => {
           canEditAdminFields={canEditAdminFields(selectedTask)}
           canVerifyTask={canVerifyTask(selectedTask)}
           onSubmit={(taskId, data) => updateTaskMutation.mutate({ taskId, data })}
-          onSubmitForVerification={(taskId, remarks) => submitVerificationMutation.mutate({ taskId, remarks })}
+          onSubmitForVerification={(taskId, remarks, verifierId) => submitVerificationMutation.mutate({ taskId, remarks, verifierId })}
           onVerify={(taskId, remarks) => verifyMutation.mutate({ taskId, remarks })}
           onReject={(taskId, remarks) => rejectMutation.mutate({ taskId, remarks })}
           isSubmitting={updateTaskMutation.isPending || submitVerificationMutation.isPending || verifyMutation.isPending || rejectMutation.isPending}
@@ -712,6 +713,7 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
   const [desc, setDesc] = useState('');
   const [team, setTeam] = useState('');
   const [assignee, setAssignee] = useState('');
+  const [verifier, setVerifier] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [deadline, setDeadline] = useState('');
   const [eventVal, setEventVal] = useState('');
@@ -728,6 +730,7 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
       taskDescription: desc,
       teamId: team,
       assignedTo: assignee,
+      verifierId: verifier || undefined,
       priority,
       deadline: deadline || undefined,
       eventId: eventVal,
@@ -737,7 +740,7 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
 
   return (
     <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-md select-none font-text text-ink">
-      <div className="bg-canvas border border-hairline sm:rounded-lg rounded-t-xl shadow-product-surface max-w-[480px] w-full p-lg space-y-md animate-scale-up text-left max-h-[90dvh] overflow-y-auto">
+      <div className="bg-canvas border border-hairline sm:rounded-lg rounded-t-xl shadow-product-surface max-w-[500px] w-full p-lg space-y-md animate-scale-up text-left max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-hairline pb-xs">
           <h3 className="text-body-strong font-bold text-ink">Initialize Operations Task</h3>
           <button onClick={onClose} className="p-xxs hover:bg-ink-muted8 rounded-md transition">
@@ -787,7 +790,7 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
             </div>
 
             <div className="space-y-xxs">
-              <label className="font-semibold text-caption-strong">Assign User</label>
+              <label className="font-semibold text-caption-strong">Assign Operator (Owner)</label>
               <select
                 value={assignee}
                 onChange={(e) => setAssignee(e.target.value)}
@@ -802,6 +805,24 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
                 }
               </select>
             </div>
+          </div>
+
+          {/* Assigned Verifier Field */}
+          <div className="space-y-xxs">
+            <label className="font-semibold text-caption-strong">Assign Verifier (Approver)</label>
+            <select
+              value={verifier}
+              onChange={(e) => setVerifier(e.target.value)}
+              className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
+            >
+              <option value="">Default (Task Assigner / Department Lead)</option>
+              {users.map(u => (
+                <option key={u.userId} value={u.userId}>
+                  {u.name} ({u.role}{u.position ? ` - ${u.position}` : ''})
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-ink-muted48">This person will receive an email notification to review and verify when work is submitted.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
@@ -888,7 +909,7 @@ interface EditModalProps {
   canEditAdminFields: boolean;
   canVerifyTask: boolean;
   onSubmit: (taskId: string, data: Partial<Task> & { remarks?: string }) => void;
-  onSubmitForVerification: (taskId: string, remarks?: string) => void;
+  onSubmitForVerification: (taskId: string, remarks?: string, verifierId?: string) => void;
   onVerify: (taskId: string, remarks?: string) => void;
   onReject: (taskId: string, remarks: string) => void;
   isSubmitting: boolean;
@@ -915,6 +936,11 @@ const EditTaskModal: React.FC<EditModalProps> = ({
   const [progress, setProgress] = useState<number>(task.completionPercent || 0);
   const [remarks, setRemarks] = useState('');
 
+  // Submit for Verification dialog state
+  const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
+  const [submitVerifier, setSubmitVerifier] = useState(task.verifierId || task.assignedBy || '');
+  const [submitNote, setSubmitNote] = useState('');
+
   // Rejection dialog state
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionInput, setRejectionInput] = useState('');
@@ -924,6 +950,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({
   const [desc, setDesc] = useState(task.taskDescription || '');
   const [team, setTeam] = useState(task.teamId || '');
   const [assignee, setAssignee] = useState(task.assignedTo || '');
+  const [verifier, setVerifier] = useState(task.verifierId || '');
   const [priority, setPriority] = useState(task.priority);
   const [deadline, setDeadline] = useState(task.deadline ? new Date(task.deadline).toISOString().split('T')[0] : '');
   const [eventVal, setEventVal] = useState(task.eventId || '');
@@ -933,12 +960,15 @@ const EditTaskModal: React.FC<EditModalProps> = ({
   const isUnderVerification = task.status === 'VERIFY';
   const isRejected = task.status === 'REJECTED';
 
+  const currentVerifierName = users.find(u => u.userId === (task.verifierId || task.assignedBy))?.name || 'Assigned Verifier';
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     const payload: any = {
       status,
       completionPercent: Number(progress),
+      verifierId: verifier || undefined,
       remarks: remarks || 'Task modified.'
     };
 
@@ -972,6 +1002,12 @@ const EditTaskModal: React.FC<EditModalProps> = ({
     } else if (task.status === 'COMPLETED' && newProgress < 100) {
       setStatus(newProgress === 0 ? 'NOT_STARTED' : 'IN_PROGRESS');
     }
+  };
+
+  const handleConfirmSubmitVerification = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmitForVerification(task.taskId, submitNote || "Deliverables submitted for review.", submitVerifier);
+    setIsSubmitDialogOpen(false);
   };
 
   const handleConfirmReject = (e: React.FormEvent) => {
@@ -1015,35 +1051,42 @@ const EditTaskModal: React.FC<EditModalProps> = ({
         )}
 
         {/* 🔍 Verification Action Panel for Authorized Verifiers */}
-        {isUnderVerification && canVerifyTask && (
+        {isUnderVerification && (
           <div className="p-md bg-purple-50 border border-purple-200 rounded-lg space-y-sm animate-fade-in">
-            <div className="flex items-center gap-xs font-bold text-[13px] text-purple-900">
-              <ShieldCheck className="w-4 h-4 text-purple-700" />
-              <span>Verification Review Required</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-xs font-bold text-[13px] text-purple-900">
+                <ShieldCheck className="w-4 h-4 text-purple-700" />
+                <span>Verification Review in Progress</span>
+              </div>
+              <span className="text-[11px] font-semibold text-purple-700 bg-purple-100 px-xs py-[2px] rounded-pill">
+                Verifier: {currentVerifierName}
+              </span>
             </div>
             <p className="text-[12px] text-purple-800 leading-relaxed">
-              This task was completed and submitted for your approval. Please inspect the deliverables.
+              This task was submitted for verification. Deliverables are ready for evaluation.
             </p>
-            <div className="flex flex-wrap items-center gap-sm pt-xxs">
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => onVerify(task.taskId, "Verified and approved on task board.")}
-                className="flex-1 apple-btn-primary bg-green-600 hover:bg-green-700 text-[12px] py-[8px] flex items-center justify-center gap-xs shadow-sm"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Approve & Complete
-              </button>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => setIsRejectDialogOpen(true)}
-                className="flex-1 bg-white border border-red-300 text-red-700 hover:bg-red-50 text-[12px] font-semibold py-[8px] px-md rounded-pill flex items-center justify-center gap-xs transition shadow-sm"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Request Changes
-              </button>
-            </div>
+            {canVerifyTask && (
+              <div className="flex flex-wrap items-center gap-sm pt-xxs">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => onVerify(task.taskId, "Verified and approved on task board.")}
+                  className="flex-1 apple-btn-primary bg-green-600 hover:bg-green-700 text-[12px] py-[8px] flex items-center justify-center gap-xs shadow-sm"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Approve & Complete
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setIsRejectDialogOpen(true)}
+                  className="flex-1 bg-white border border-red-300 text-red-700 hover:bg-red-50 text-[12px] font-semibold py-[8px] px-md rounded-pill flex items-center justify-center gap-xs transition shadow-sm"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Request Changes
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1051,24 +1094,75 @@ const EditTaskModal: React.FC<EditModalProps> = ({
         {(!isUnderVerification && task.status !== 'COMPLETED') && (isOwner || canEditAdminFields) && (
           <div className="p-sm bg-blue-50/60 border border-blue-200 rounded-lg flex items-center justify-between gap-sm">
             <div className="space-y-[2px]">
-              <span className="text-[12px] font-bold text-blue-900">Finished your work?</span>
-              <p className="text-[11px] text-blue-700">Submit task to lead/verifier for approval.</p>
+              <span className="text-[12px] font-bold text-blue-900">Finished your deliverables?</span>
+              <p className="text-[11px] text-blue-700">Submit this task to an approver for official verification.</p>
             </div>
             <button
               type="button"
               disabled={isSubmitting}
-              onClick={() => {
-                const note = window.prompt("Add an optional progress note for the verifier:", remarks || "Deliverables ready.");
-                if (note !== null) {
-                  onSubmitForVerification(task.taskId, note);
-                }
-              }}
+              onClick={() => setIsSubmitDialogOpen(true)}
               className="apple-btn-primary bg-primary hover:bg-primary-focus text-[12px] py-[7px] px-md flex items-center gap-xs shrink-0 shadow-sm"
             >
               <Send className="w-3.5 h-3.5" />
               Submit for Verification
             </button>
           </div>
+        )}
+
+        {/* Submit for Verification Modal Dialog */}
+        {isSubmitDialogOpen && (
+          <form onSubmit={handleConfirmSubmitVerification} className="p-md bg-white border-2 border-primary/40 rounded-lg shadow-md space-y-sm animate-scale-up text-left">
+            <div className="space-y-xxs">
+              <h4 className="font-bold text-[13px] text-primary">Submit for Verification</h4>
+              <p className="text-[11px] text-ink-muted48">Select who should verify this task and add any delivery remarks.</p>
+            </div>
+
+            <div className="space-y-xxs">
+              <label className="font-semibold text-caption-strong text-ink">Assign Verifier (Approver) *</label>
+              <select
+                required
+                value={submitVerifier}
+                onChange={(e) => setSubmitVerifier(e.target.value)}
+                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
+              >
+                <option value="">Select an approver...</option>
+                {users.map(u => (
+                  <option key={u.userId} value={u.userId}>
+                    {u.name} ({u.role}{u.position ? ` - ${u.position}` : ''})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-xxs">
+              <label className="font-semibold text-caption-strong text-ink">Delivery Remarks / Progress Link</label>
+              <textarea
+                rows={2}
+                placeholder="e.g. Completed design assets. Drive folder updated with high-res PNG and source PSD files."
+                value={submitNote}
+                onChange={(e) => setSubmitNote(e.target.value)}
+                className="w-full bg-canvas border border-hairline rounded-md p-sm text-[12px] text-ink focus:border-primary focus:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-sm pt-xs border-t border-hairline">
+              <button
+                type="button"
+                onClick={() => setIsSubmitDialogOpen(false)}
+                className="px-md py-[6px] text-[12px] border border-hairline rounded-md hover:bg-ink-muted8"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-lg py-[6px] text-[12px] apple-btn-primary flex items-center gap-xs shadow-sm"
+              >
+                <Send className="w-3.5 h-3.5" />
+                Confirm & Submit
+              </button>
+            </div>
+          </form>
         )}
 
         {/* Reject Dialog Popover */}
@@ -1142,6 +1236,25 @@ const EditTaskModal: React.FC<EditModalProps> = ({
               </div>
             </div>
 
+            {/* When status is Under Verification, display Verifier Selection */}
+            {status === 'VERIFY' && (
+              <div className="space-y-xxs bg-purple-50/50 p-xs rounded-md border border-purple-200">
+                <label className="font-semibold text-caption-strong text-purple-900">Assigned Verifier (Approver)</label>
+                <select
+                  value={verifier}
+                  onChange={(e) => setVerifier(e.target.value)}
+                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
+                >
+                  <option value="">Default (Task Assigner / Lead)</option>
+                  {users.map(u => (
+                    <option key={u.userId} value={u.userId}>
+                      {u.name} ({u.role}{u.position ? ` - ${u.position}` : ''})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="space-y-xxs">
               <label className="font-semibold text-caption-strong">Operator Activity Remarks *</label>
               <input
@@ -1155,7 +1268,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Administrative Details (Read Only for general members, editable by Lead/President/Admin) */}
+          {/* Section 2: Administrative Details */}
           <div className="space-y-sm">
             <h4 className="text-[11px] font-bold text-ink-muted48 uppercase tracking-wider">Task Parameters</h4>
 
@@ -1200,7 +1313,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({
               </div>
 
               <div className="space-y-xxs">
-                <label className="font-semibold text-caption-strong">Assign User</label>
+                <label className="font-semibold text-caption-strong">Assign Operator (Owner)</label>
                 <select
                   disabled={!canEditAdminFields}
                   value={assignee}
@@ -1216,6 +1329,24 @@ const EditTaskModal: React.FC<EditModalProps> = ({
                   }
                 </select>
               </div>
+            </div>
+
+            {/* Verifier Selector in Parameters */}
+            <div className="space-y-xxs">
+              <label className="font-semibold text-caption-strong">Assigned Verifier (Approver)</label>
+              <select
+                disabled={!canEditAdminFields}
+                value={verifier}
+                onChange={(e) => setVerifier(e.target.value)}
+                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
+              >
+                <option value="">Default (Task Assigner / Lead)</option>
+                {users.map(u => (
+                  <option key={u.userId} value={u.userId}>
+                    {u.name} ({u.role}{u.position ? ` - ${u.position}` : ''})
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">

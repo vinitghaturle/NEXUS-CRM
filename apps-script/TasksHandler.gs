@@ -223,21 +223,27 @@ function handleUpdateTask(taskId, taskData, operatorUserId) {
 /**
  * Task owner submits task for verification by leadership.
  * @param {string} taskId
+ * @param {string} verifierId - Optional user ID of the chosen verifier
  * @param {string} remarks - Note from the submitter
  * @param {string} operatorUserId - Submitting user
  */
-function handleTaskSubmitForVerification(taskId, remarks, operatorUserId) {
+function handleTaskSubmitForVerification(taskId, verifierId, remarks, operatorUserId) {
   if (!taskId) throw new Error("Missing task ID.");
 
   var tasksRepo = new SheetRepository("04_Tasks", "TSK", "taskId");
   var task = tasksRepo.getById(taskId);
   if (!task) throw new Error("Task not found with ID: " + taskId);
 
-  return handleUpdateTask(taskId, {
+  var payload = {
     status: "VERIFY",
     completionPercent: 100,
     remarks: remarks || "Submitted for verification."
-  }, operatorUserId);
+  };
+  if (verifierId) {
+    payload.verifierId = verifierId;
+  }
+
+  return handleUpdateTask(taskId, payload, operatorUserId);
 }
 
 /**

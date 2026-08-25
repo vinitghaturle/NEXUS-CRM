@@ -206,7 +206,7 @@ function doPost(e) {
         responseData = handleGetUserWorkload(payload.payload.targetUserId);
         break;
       case "tasks.submitForVerification":
-        responseData = handleTaskSubmitForVerification(payload.payload.taskId, payload.payload.remarks, user.userId);
+        responseData = handleTaskSubmitForVerification(payload.payload.taskId, payload.payload.verifierId, payload.payload.remarks, user.userId);
         break;
       case "tasks.verify":
         responseData = handleTaskVerify(payload.payload.taskId, payload.payload.remarks, user.userId);
