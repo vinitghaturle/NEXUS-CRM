@@ -160,6 +160,9 @@ function doPost(e) {
       case "events.cancel":
         responseData = handleCancelEvent(payload.payload.eventId, user.userId);
         break;
+      case "events.delete":
+        responseData = handleDeleteEvent(payload.payload.eventId, user.userId);
+        break;
         
       // Event Templates Handlers
       case "templates.list":
@@ -195,6 +198,9 @@ function doPost(e) {
         break;
       case "tasks.update":
         responseData = handleUpdateTask(payload.payload.taskId, payload.payload, user.userId);
+        break;
+      case "tasks.delete":
+        responseData = handleDeleteTask(payload.payload.taskId, user.userId);
         break;
       case "tasks.updateStatus":
         responseData = handleUpdateTaskStatus(payload.payload.taskId, payload.payload.status, payload.payload.remarks, user.userId);

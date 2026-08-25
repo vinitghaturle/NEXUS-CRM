@@ -15,7 +15,8 @@ import {
   AlertCircle,
   ShieldCheck,
   RotateCcw,
-  Send
+  Send,
+  Trash2
 } from 'lucide-react';
 
 interface Task {
@@ -247,10 +248,32 @@ export const TaskBoardPage: React.FC = () => {
     }
   });
 
-  // Check if current user can edit administrative fields (reassign, set priority, deadlines)
+  // Mutate delete task
+  const deleteTaskMutation = useMutation({
+    mutationFn: (taskId: string) => callApi('tasks.delete', { taskId }),
+    onSuccess: () => {
+      setIsEditModalOpen(false);
+      setSelectedTask(null);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (err) => {
+      alert(`Failed to delete task: ${err instanceof Error ? err.message : 'Unauthorized action'}`);
+    }
+  });
+
+  // Check if current user can delete task (Creator or Executive)
+  const canDeleteTask = (task: Task) => {
+    if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
+    if (task.assignedBy && task.assignedBy === myUserId) return true;
+    return false;
+  };
+
+  // Check if current user can edit administrative/detail fields (Creator, Assignee, Team Lead, Executive)
   const canEditAdminFields = (task: Task) => {
     if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
     if (role === 'LEAD' && task.teamId === myTeamId) return true;
+    if (task.assignedBy && task.assignedBy === myUserId) return true;
+    if (task.assignedTo && task.assignedTo === myUserId) return true;
     return false;
   };
 
@@ -684,11 +707,13 @@ export const TaskBoardPage: React.FC = () => {
           myUserId={myUserId}
           canEditAdminFields={canEditAdminFields(selectedTask)}
           canVerifyTask={canVerifyTask(selectedTask)}
+          canDeleteTask={canDeleteTask(selectedTask)}
+          onDeleteTask={(taskId) => deleteTaskMutation.mutate(taskId)}
           onSubmit={(taskId, data) => updateTaskMutation.mutate({ taskId, data })}
           onSubmitForVerification={(taskId, remarks, verifierId) => submitVerificationMutation.mutate({ taskId, remarks, verifierId })}
           onVerify={(taskId, remarks) => verifyMutation.mutate({ taskId, remarks })}
           onReject={(taskId, remarks) => rejectMutation.mutate({ taskId, remarks })}
-          isSubmitting={updateTaskMutation.isPending || submitVerificationMutation.isPending || verifyMutation.isPending || rejectMutation.isPending}
+          isSubmitting={updateTaskMutation.isPending || submitVerificationMutation.isPending || verifyMutation.isPending || rejectMutation.isPending || deleteTaskMutation.isPending}
           onClose={() => {
             setIsEditModalOpen(false);
             setSelectedTask(null);
@@ -908,6 +933,8 @@ interface EditModalProps {
   myUserId: string;
   canEditAdminFields: boolean;
   canVerifyTask: boolean;
+  canDeleteTask: boolean;
+  onDeleteTask: (taskId: string) => void;
   onSubmit: (taskId: string, data: Partial<Task> & { remarks?: string }) => void;
   onSubmitForVerification: (taskId: string, remarks?: string, verifierId?: string) => void;
   onVerify: (taskId: string, remarks?: string) => void;
@@ -924,6 +951,8 @@ const EditTaskModal: React.FC<EditModalProps> = ({
   myUserId,
   canEditAdminFields, 
   canVerifyTask,
+  canDeleteTask,
+  onDeleteTask,
   onSubmit, 
   onSubmitForVerification,
   onVerify,
@@ -1407,21 +1436,41 @@ const EditTaskModal: React.FC<EditModalProps> = ({
             </div>
           </div>
 
-          <div className="flex justify-end gap-sm pt-xs border-t border-hairline">
-            <button
-              type="button"
-              onClick={onClose}
-              className="apple-btn-secondary py-[8px] px-md select-none active:scale-[0.98] transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="apple-btn-primary py-[8px] px-lg select-none active:scale-[0.98] transition"
-            >
-              Commit Changes
-            </button>
+          <div className="flex items-center justify-between gap-sm pt-xs border-t border-hairline">
+            <div>
+              {canDeleteTask && (
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to permanently delete task "${task.taskTitle}" (${task.taskId})?`)) {
+                      onDeleteTask(task.taskId);
+                    }
+                  }}
+                  className="px-sm py-[7px] text-[12px] font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition flex items-center gap-xxs"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete Task
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-sm">
+              <button
+                type="button"
+                onClick={onClose}
+                className="apple-btn-secondary py-[8px] px-md select-none active:scale-[0.98] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="apple-btn-primary py-[8px] px-lg select-none active:scale-[0.98] transition"
+              >
+                Commit Changes
+              </button>
+            </div>
           </div>
         </form>
       </div>

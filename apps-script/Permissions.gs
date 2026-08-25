@@ -22,6 +22,30 @@ function canUserPerform(user, action, resourceContext) {
     teamId = user.teamId;
   }
 
+  // Auto-resolve resource attributes if IDs are provided without metadata
+  if (resourceContext) {
+    if (resourceContext.taskId && (!resourceContext.assignedBy || !resourceContext.assignedTo)) {
+      try {
+        var tRepo = new SheetRepository("04_Tasks", "TSK", "taskId");
+        var tRecord = tRepo.getById(resourceContext.taskId);
+        if (tRecord) {
+          resourceContext.assignedBy = tRecord.assignedBy;
+          resourceContext.assignedTo = tRecord.assignedTo;
+          resourceContext.teamId = tRecord.teamId;
+        }
+      } catch (e) {}
+    }
+    if (resourceContext.eventId && !resourceContext.createdBy) {
+      try {
+        var eRepo = new SheetRepository("03_Events", "EVT", "eventId");
+        var eRecord = eRepo.getById(resourceContext.eventId);
+        if (eRecord) {
+          resourceContext.createdBy = eRecord.createdBy;
+        }
+      } catch (e) {}
+    }
+  }
+
   // 1. ADMIN has absolute access to everything — full system permissions.
   if (role === "ADMIN") {
     return true;
@@ -85,11 +109,20 @@ function canUserPerform(user, action, resourceContext) {
 
     case "tasks.create":
     case "tasks.assign":
+      return role === "LEAD";
+
     case "tasks.update":
-      if (role === "LEAD") {
-        // Leads can create/assign/update tasks
-        return true;
+      if (role === "LEAD") return true;
+      // Task can be edited by the creator (assignedBy) or the assignee (assignedTo)
+      if (resourceContext) {
+        if (resourceContext.assignedBy === userId) return true;
+        if (resourceContext.assignedTo === userId) return true;
       }
+      return false;
+
+    case "tasks.delete":
+      // Task can be deleted by the user who created it (assignedBy) or executive
+      if (resourceContext && resourceContext.assignedBy === userId) return true;
       return false;
 
     case "tasks.updateStatus":
@@ -105,8 +138,14 @@ function canUserPerform(user, action, resourceContext) {
 
     case "events.create":
     case "events.update":
+      if (role === "LEAD") return true;
+      if (resourceContext && resourceContext.createdBy === userId) return true;
+      return false;
+
+    case "events.delete":
     case "events.cancel":
-      return role === "LEAD";
+      if (resourceContext && resourceContext.createdBy === userId) return true;
+      return false;
 
     case "issues.create":
       return role === "LEAD" || role === "MEMBER" || role === "GENERAL_MEMBER";

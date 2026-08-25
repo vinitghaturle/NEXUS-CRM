@@ -401,6 +401,23 @@ function handleGetUserWorkload(targetUserId) {
 }
 
 /**
+ * Deletes / cancels a task.
+ * @param {string} taskId
+ * @param {string} operatorUserId
+ */
+function handleDeleteTask(taskId, operatorUserId) {
+  if (!taskId) throw new Error("Missing task ID.");
+  var tasksRepo = new SheetRepository("04_Tasks", "TSK", "taskId");
+  var existingTask = tasksRepo.getById(taskId);
+  if (!existingTask) throw new Error("Task not found with ID: " + taskId);
+
+  var deleted = tasksRepo.delete(taskId);
+  logTaskUpdate(taskId, operatorUserId || "SYSTEM", existingTask.status, "CANCELLED", existingTask.completionPercent, 0, "Task deleted/cancelled.");
+  logAudit(operatorUserId, "tasks.delete", "Tasks", taskId, existingTask, deleted, "SUCCESS");
+  return deleted;
+}
+
+/**
  * Internal helper to write update entries to the 05_Task_Updates sheet.
  */
 function logTaskUpdate(taskId, operatorUserId, previousStatus, newStatus, previousCompletion, newCompletion, remarks) {

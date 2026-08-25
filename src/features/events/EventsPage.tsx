@@ -33,6 +33,7 @@ interface EventItem {
   driveFolderUrl?: string;
   budgetAllocation?: number;
   remarks?: string;
+  createdBy?: string;
 }
 
 interface Task {
@@ -130,7 +131,30 @@ export const EventsPage: React.FC = () => {
     }
   });
 
+  const myUserId = profile?.userId || '';
+
+  // Mutate delete event
+  const deleteEventMutation = useMutation({
+    mutationFn: (eventId: string) => callApi('events.delete', { eventId }),
+    onSuccess: () => {
+      setIsEditOpen(false);
+      setEditingEvent(null);
+      setSelectedEvent(null);
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (err) => {
+      alert(`Failed to delete event: ${err instanceof Error ? err.message : 'Unauthorized action'}`);
+    }
+  });
+
   const canManageEvents = role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN' || role === 'LEAD';
+
+  const canDeleteEvent = (event: EventItem) => {
+    if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
+    if (event.createdBy && event.createdBy === myUserId) return true;
+    return false;
+  };
 
   // Calendar Helper functions
   const getDaysInMonth = (date: Date) => {
@@ -814,12 +838,14 @@ export const EventsPage: React.FC = () => {
         <EditEventDialog
           event={editingEvent}
           teams={teams}
+          canDelete={canDeleteEvent(editingEvent)}
+          onDelete={(eventId) => deleteEventMutation.mutate(eventId)}
           onClose={() => {
             setIsEditOpen(false);
             setEditingEvent(null);
           }}
           onSubmit={(data) => updateEventMutation.mutate(data)}
-          isSubmitting={updateEventMutation.isPending}
+          isSubmitting={updateEventMutation.isPending || deleteEventMutation.isPending}
         />
       )}
 

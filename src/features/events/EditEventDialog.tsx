@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Calendar, Loader2 } from 'lucide-react';
+import { X, Calendar, Loader2, Trash2 } from 'lucide-react';
 
 interface Team {
   teamId: string;
@@ -18,11 +18,14 @@ interface EventItem {
   driveFolderUrl?: string;
   budgetAllocation?: number;
   remarks?: string;
+  createdBy?: string;
 }
 
 interface EditEventDialogProps {
   event: EventItem;
   teams: Team[];
+  canDelete?: boolean;
+  onDelete?: (eventId: string) => void;
   onClose: () => void;
   onSubmit: (data: any) => void;
   isSubmitting: boolean;
@@ -31,6 +34,8 @@ interface EditEventDialogProps {
 export const EditEventDialog: React.FC<EditEventDialogProps> = ({
   event,
   teams,
+  canDelete = false,
+  onDelete,
   onClose,
   onSubmit,
   isSubmitting
@@ -235,29 +240,49 @@ export const EditEventDialog: React.FC<EditEventDialogProps> = ({
           </div>
 
           {/* Footer Actions */}
-          <div className="pt-sm flex items-center justify-end gap-sm border-t border-hairline">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-md py-[8px] text-[13px] font-medium text-ink-muted48 hover:text-ink hover:bg-ink-muted8 rounded-md transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="apple-btn-primary flex items-center justify-center px-lg py-[8px] text-[13px] font-medium active:scale-95 transition-all"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-xs" />
-                  Saving Changes...
-                </>
-              ) : (
-                'Save Changes'
+          <div className="pt-sm flex items-center justify-between gap-sm border-t border-hairline">
+            <div>
+              {canDelete && onDelete && (
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to permanently delete event "${event.eventName}" (${event.eventId})? This will also cancel its associated tasks.`)) {
+                      onDelete(event.eventId);
+                    }
+                  }}
+                  className="px-sm py-[7px] text-[12px] font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition flex items-center gap-xxs"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete Event
+                </button>
               )}
-            </button>
+            </div>
+
+            <div className="flex items-center gap-sm">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="px-md py-[8px] text-[13px] font-medium text-ink-muted48 hover:text-ink hover:bg-ink-muted8 rounded-md transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="apple-btn-primary flex items-center justify-center px-lg py-[8px] text-[13px] font-medium active:scale-95 transition-all"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-xs" />
+                    Saving Changes...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
+            </div>
           </div>
 
         </form>

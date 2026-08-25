@@ -170,6 +170,24 @@ function handleCancelEvent(eventId, operatorUserId) {
 }
 
 /**
+ * Deletes an event and its uncompleted tasks.
+ * @param {string} eventId - Unique ID of the event to delete
+ * @param {string} operatorUserId - User ID of the operator
+ * @returns {Object} The deleted event record
+ */
+function handleDeleteEvent(eventId, operatorUserId) {
+  if (!eventId) throw new Error("Missing event ID.");
+  var eventsRepo = new SheetRepository("03_Events", "EVT", "eventId");
+  var existingEvent = eventsRepo.getById(eventId);
+  if (!existingEvent) throw new Error("Event not found with ID: " + eventId);
+
+  var deleted = eventsRepo.delete(eventId);
+  cascadeEventCancellation(eventId);
+  logAudit(operatorUserId, "events.delete", "Events", eventId, existingEvent, deleted, "SUCCESS");
+  return deleted;
+}
+
+/**
  * Helper to cascade cancellation to all uncompleted tasks for a given event.
  * @param {string} eventId - Unique ID of the cancelled event
  */
