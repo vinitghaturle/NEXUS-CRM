@@ -26,9 +26,19 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Read cached profile immediately on boot to prevent flash of logged-out state
+  const cachedProfile = (() => {
+    try {
+      const stored = localStorage.getItem('nexus_crm_profile');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const [user, setUser] = useState<User | null>(auth.currentUser);
+  const [profile, setProfile] = useState<UserProfile | null>(cachedProfile);
+  const [loading, setLoading] = useState<boolean>(!cachedProfile);
   const [error, setError] = useState<string | null>(null);
 
   const clearError = () => setError(null);
@@ -37,26 +47,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const crmProfile = await callApi<UserProfile>('auth.me');
       setProfile(crmProfile);
+      localStorage.setItem('nexus_crm_profile', JSON.stringify(crmProfile));
     } catch (err: any) {
-      console.error('Failed to load CRM user profile:', err);
+      console.warn('Profile sync notice:', err);
+      // If we already have a cached profile, keep the session active
+      const existing = localStorage.getItem('nexus_crm_profile');
+      if (existing) {
+        try {
+          setProfile(JSON.parse(existing));
+          return;
+        } catch {}
+      }
       setError(err.message || 'Authorization failed: User profile not registered in CRM.');
-      // Force logout if profile cannot be resolved (unregistered user)
       await firebaseLogout();
+      localStorage.removeItem('nexus_crm_profile');
       setProfile(null);
     }
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(true);
       if (currentUser) {
         setError(null);
         setUser(currentUser);
-        // User logged in, fetch their CRM profile
         await fetchProfile();
       } else {
         setUser(null);
         setProfile(null);
+        localStorage.removeItem('nexus_crm_profile');
       }
       setLoading(false);
     });
@@ -82,6 +100,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       await firebaseLogout();
+      localStorage.removeItem('nexus_crm_profile');
+      setUser(null);
+      setProfile(null);
     } catch (err: any) {
       console.error('Logout error:', err);
       setError(err.message || 'Failed to log out.');

@@ -57,12 +57,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // SPA Navigation: Network-first with /index.html fallback
+  // SPA Navigation: Network-first with /index.html fallback for client-side routing
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => {
-        return caches.match('/index.html') || caches.match('/');
-      })
+      fetch(request)
+        .then((response) => {
+          if (!response || response.status === 404) {
+            return caches.match('/index.html') || caches.match('/') || fetch('/index.html');
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match('/index.html') || caches.match('/') || fetch('/index.html');
+        })
     );
     return;
   }
