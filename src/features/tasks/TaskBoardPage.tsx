@@ -399,7 +399,7 @@ export const TaskBoardPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-md">
         <div className="space-y-xxs">
           <span className="text-primary font-semibold text-caption-strong uppercase tracking-wider">Department Board</span>
-          <h1 className="text-display-md font-bold text-ink tracking-tight">Task Kanban Board</h1>
+          <h1 className="text-display-md font-bold text-ink tracking-tight">Task Board</h1>
           <p className="text-caption-spec text-ink-muted48">Track workloads, verification milestones, and task deliverables.</p>
         </div>
         
@@ -768,8 +768,8 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
   };
 
   return (
-    <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-md select-none font-text text-ink">
-      <div className="bg-canvas border border-hairline sm:rounded-lg rounded-t-xl shadow-product-surface max-w-[500px] w-full p-lg space-y-md animate-scale-up text-left max-h-[90dvh] overflow-y-auto">
+    <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-md select-none font-text text-ink safe-top safe-bottom safe-left safe-right">
+      <div className="bg-canvas border border-hairline sm:rounded-lg rounded-t-xl shadow-product-surface max-w-[500px] w-full p-lg space-y-md animate-scale-up text-left max-h-[calc(90dvh-env(safe-area-inset-top,0px))] overflow-y-auto safe-bottom">
         <div className="flex items-center justify-between border-b border-hairline pb-xs">
           <h3 className="text-body-strong font-bold text-ink">Initialize Operations Task</h3>
           <button onClick={onClose} className="p-xxs hover:bg-ink-muted8 rounded-md transition">
@@ -1056,8 +1056,8 @@ const EditTaskModal: React.FC<EditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-md select-none font-text text-ink">
-      <div className="bg-canvas border border-hairline sm:rounded-lg rounded-t-xl shadow-product-surface max-w-[540px] w-full p-lg space-y-md animate-scale-up text-left max-h-[92dvh] overflow-y-auto">
+    <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-md select-none font-text text-ink safe-top safe-bottom safe-left safe-right">
+      <div className="bg-canvas border border-hairline sm:rounded-lg rounded-t-xl shadow-product-surface max-w-[540px] w-full p-lg space-y-md animate-scale-up text-left max-h-[calc(92dvh-env(safe-area-inset-top,0px))] overflow-y-auto safe-bottom">
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-hairline pb-xs">

@@ -55,8 +55,9 @@ export const AppShell: React.FC = () => {
   // Native Android & Capacitor lifecycle configuration
   useEffect(() => {
     try {
-      StatusBar.setStyle({ style: Style.Light }).catch(() => {});
-      StatusBar.setBackgroundColor({ color: '#0066cc' }).catch(() => {});
+      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: '#ffffff' }).catch(() => {});
+      StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
     } catch {
       // Web fallback
     }
@@ -284,8 +285,8 @@ export const AppShell: React.FC = () => {
   return (
     <div className="min-h-screen bg-canvas flex flex-col font-text text-ink">
       
-      {/* 1. TOP NAVBAR (Sticky, 56px height) */}
-      <header className="h-[56px] bg-canvas border-b border-hairline sticky top-0 z-40 flex items-center justify-between px-lg select-none">
+      {/* 1. TOP NAVBAR (Sticky, safe-area adaptive) */}
+      <header className="header-safe bg-canvas border-b border-hairline sticky top-0 z-40 flex items-center justify-between px-lg select-none">
         <div className="flex items-center gap-md">
           {/* Mobile hamburger toggle — shows full sidebar drawer */}
           <button 
@@ -414,11 +415,11 @@ export const AppShell: React.FC = () => {
         {/* 3. MOBILE SIDEBAR DRAWER (Overlay, toggled by menu state) */}
         {mobileMenuOpen && (
           <div 
-            className="md:hidden fixed inset-0 top-[56px] bg-canvas-parchment/60 backdrop-blur-sm z-30 transition-all duration-300"
+            className="md:hidden fixed inset-0 bg-canvas-parchment/60 backdrop-blur-sm z-30 transition-all duration-300 drawer-safe"
             onClick={closeMobileMenu}
           >
             <nav 
-              className="w-[260px] h-full bg-canvas border-r border-hairline shadow-lg p-md flex flex-col justify-between animate-slide-right overflow-y-auto"
+              className="w-[280px] h-full bg-canvas border-r border-hairline shadow-lg p-md flex flex-col justify-between animate-slide-right overflow-y-auto safe-bottom"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="space-y-md">
@@ -461,7 +462,7 @@ export const AppShell: React.FC = () => {
         )}
 
         {/* 4. MAIN BODY CONTAINER (Flex expansion, padding margins) */}
-        <main className="flex-1 bg-canvas p-md sm:p-lg md:p-xl overflow-x-hidden relative pb-[80px] md:pb-xl">
+        <main className="flex-1 bg-canvas p-md sm:p-lg md:p-xl overflow-x-hidden relative main-safe md:pb-xl safe-left safe-right">
           <div className="max-w-[1200px] mx-auto animate-fade-in">
             <Outlet />
           </div>
@@ -470,7 +471,7 @@ export const AppShell: React.FC = () => {
       </div>
 
       {/* 5. MOBILE BOTTOM NAVIGATION BAR (PWA style, hidden on desktop) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-canvas border-t border-hairline z-40 flex items-center justify-around px-xs py-xs safe-area-pb">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-canvas/95 backdrop-blur-md border-t border-hairline z-40 flex items-center justify-around px-xs py-xs bottom-nav-safe">
         <NavLink
           to="/dashboard"
           className={({ isActive }) =>

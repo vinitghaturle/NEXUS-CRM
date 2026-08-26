@@ -44,7 +44,7 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-canvas via-canvas-parchment to-canvas flex flex-col justify-center py-section px-lg relative overflow-hidden select-none font-text text-ink">
+    <div className="min-h-screen bg-gradient-to-br from-canvas via-canvas-parchment to-canvas flex flex-col justify-center py-section px-lg relative overflow-hidden select-none font-text text-ink safe-top safe-bottom safe-left safe-right">
       
       {/* Background ambient lighting effects */}
       <div className="absolute w-[360px] h-[360px] rounded-full bg-primary/5 blur-3xl -top-[120px] -right-[120px]"></div>
