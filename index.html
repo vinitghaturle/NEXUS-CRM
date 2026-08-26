@@ -2,14 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#ffffff" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="NEXUS CRM" />
+    
+    <!-- Primary App Meta -->
     <title>NEXUS CRM Operations Portal</title>
+    <meta name="description" content="Executive operations, event management, and workload tracking portal for NEXUS." />
+    <meta name="theme-color" content="#0066cc" />
+
+    <!-- Icons & Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+
+    <!-- PWA Web Manifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- iOS / Safari PWA Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NEXUS" />
+
+    <!-- Android / Chrome PWA Support -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="NEXUS" />
+    <meta name="msapplication-TileColor" content="#0066cc" />
+    <meta name="msapplication-tap-highlight" content="no" />
   </head>
   <body>
     <div id="root"></div>
@@ -18,8 +35,21 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('Service Worker registered successfully!', reg.scope))
-            .catch(err => console.error('Service Worker registration failed:', err));
+            .then(reg => {
+              console.log('[NEXUS PWA] Service Worker registered scope:', reg.scope);
+              // Listen for updates
+              reg.onupdatefound = () => {
+                const installingWorker = reg.installing;
+                if (installingWorker) {
+                  installingWorker.onstatechange = () => {
+                    if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                      console.log('[NEXUS PWA] New update available.');
+                    }
+                  };
+                }
+              };
+            })
+            .catch(err => console.error('[NEXUS PWA] SW registration error:', err));
         });
       }
     </script>

@@ -24,6 +24,11 @@
   }
 
   /* HTML Base styling snaps to design rules */
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     background-color: var(--canvas);
     color: var(--ink);
@@ -33,6 +38,16 @@
     -moz-osx-font-smoothing: grayscale;
     margin: 0;
     padding: 0;
+    touch-action: manipulation;
+    overscroll-behavior-y: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Allow text selection in editable fields and descriptions */
+  input, textarea, [contenteditable="true"], p, article, .selectable-text {
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   /* SF Pro Display headings are tight and semi-bold */

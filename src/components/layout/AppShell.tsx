@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { callApi } from '../../services/api';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { PWAInstallPrompt } from '../ui/PWAInstallPrompt';
+import { App as CapApp } from '@capacitor/app';
+import { StatusBar, Style } from '@capacitor/status-bar';
 import { 
   Bell,
   Menu,
@@ -48,6 +51,39 @@ export const AppShell: React.FC = () => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+
+  // Native Android & Capacitor lifecycle configuration
+  useEffect(() => {
+    try {
+      StatusBar.setStyle({ style: Style.Light }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: '#0066cc' }).catch(() => {});
+    } catch {
+      // Web fallback
+    }
+
+    let backHandle: any;
+    try {
+      backHandle = CapApp.addListener('backButton', ({ canGoBack }) => {
+        if (mobileMenuOpen) {
+          setMobileMenuOpen(false);
+        } else if (notifOpen) {
+          setNotifOpen(false);
+        } else if (window.location.pathname !== '/dashboard' && canGoBack) {
+          navigate(-1);
+        } else {
+          CapApp.exitApp();
+        }
+      });
+    } catch {
+      // Web fallback
+    }
+
+    return () => {
+      if (backHandle && typeof backHandle.then === 'function') {
+        backHandle.then((h: any) => h.remove?.());
+      }
+    };
+  }, [mobileMenuOpen, notifOpen, navigate]);
 
   // Fetch tasks for notifications
   const { data: tasks = [] } = useQuery<any[]>({
@@ -497,6 +533,9 @@ export const AppShell: React.FC = () => {
           <span className="text-[10px] font-semibold">More</span>
         </button>
       </nav>
+
+      {/* 6. PWA Install Promotion Banner */}
+      <PWAInstallPrompt />
     </div>
   );
 };
