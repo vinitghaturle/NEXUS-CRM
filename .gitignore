@@ -28,3 +28,14 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Documentation & Guides
+DESIGN.md
+NEXUS CRM & Operations Management System — Product Requirements Document.md
+NEXUS_Build_Guide_for_Coding_Agent.md
+NEXUS_V1_Core_Product_Scope_and_Refactoring_Guide.md
+NEXUS_V1_Email_Notification_and_Task_Verification_Feature.md
+
+# Build artifacts & developer scripts
+scripts/
+dist/
+node_modules/
