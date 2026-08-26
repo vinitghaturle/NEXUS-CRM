@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Shield, Lock, Mail, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -54,8 +54,8 @@ export const LoginPage: React.FC = () => {
         
         {/* Logo and Tagline */}
         <div className="text-center space-y-xs">
-          <div className="inline-flex w-[48px] h-[48px] rounded-full bg-ink-muted8 text-primary items-center justify-center border border-hairline">
-            <Shield className="w-[20px] h-[20px]" />
+          <div className="inline-flex w-[56px] h-[56px] rounded-2xl bg-canvas border border-hairline shadow-product-surface items-center justify-center p-[6px]">
+            <img src="/icons/icon-192x192.png" className="w-full h-full object-contain rounded-xl" alt="NEXUS" />
           </div>
           <div className="space-y-xxs">
             <h1 className="text-display-sm font-semibold tracking-tight">NEXUS Network</h1>

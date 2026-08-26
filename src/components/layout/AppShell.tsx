@@ -297,8 +297,8 @@ export const AppShell: React.FC = () => {
           </button>
 
           {/* Logo brand */}
-          <span className="font-display font-bold tracking-tight text-ink flex items-center gap-xxs">
-            <span className="w-4 h-4 rounded-full border-[3px] border-primary inline-block"></span>
+          <span className="font-display font-bold tracking-tight text-ink flex items-center gap-xs">
+            <img src="/icons/icon-192x192.png" className="w-6 h-6 rounded object-contain shadow-xs" alt="NEXUS Logo" />
             <span className="hidden xs:inline">NEXUS CRM</span>
             <span className="xs:hidden">NEXUS</span>
           </span>
