@@ -15,46 +15,48 @@ export default {
     },
     extend: {
       colors: {
-        // Apple Design Spec colors
+        // CSS variable–driven colors: automatically switch with .dark class
         primary: {
-          DEFAULT: "#0066cc",      // Action Blue
-          focus: "#0071e3",        // Focus Blue
-          dark: "#2997ff",         // Sky Link Blue (for dark canvases)
+          DEFAULT: "var(--primary)",
+          focus: "var(--primary-focus)",
+          dark: "var(--primary-on-dark)",
           foreground: "#ffffff",
         },
         ink: {
-          DEFAULT: "#1d1d1f",
-          muted80: "#333333",
-          muted48: "#7a7a7a",
+          DEFAULT: "var(--ink)",
+          muted80: "rgba(128,128,128,0.80)",
+          muted48: "rgba(128,128,128,0.48)",
+          muted32: "rgba(128,128,128,0.32)",
+          muted8: "rgba(128,128,128,0.08)",
         },
         canvas: {
-          DEFAULT: "#ffffff",      // Pure White
-          parchment: "#f5f5f7",    // Apple off-white
+          DEFAULT: "var(--canvas)",
+          parchment: "var(--canvas-parchment)",
         },
         surface: {
-          pearl: "#fafafc",        // Pearl secondary button
-          tile1: "#272729",        // Dark tile 1
-          tile2: "#2a2a2c",        // Dark tile 2
-          tile3: "#252527",        // Dark tile 3
-          black: "#000000",        // Pure black void
-          chip: "rgba(210, 210, 215, 0.64)", // Translucent gray chip
+          pearl: "var(--surface-pearl)",
+          tile1: "var(--surface-tile-1)",
+          tile2: "var(--surface-tile-2)",
+          tile3: "var(--surface-tile-3)",
+          black: "#000000",
+          chip: "rgba(128, 128, 135, 0.18)",
         },
-        hairline: "#e0e0e0",
-        "divider-soft": "#f0f0f0",
+        hairline: "var(--hairline)",
+        "divider-soft": "var(--hairline)",
 
         // Shadcn UI compatibility mapping
-        border: "#e0e0e0",
-        input: "#ffffff",
-        ring: "#0071e3",
-        background: "#ffffff",
-        foreground: "#1d1d1f",
+        border: "var(--hairline)",
+        input: "var(--canvas)",
+        ring: "var(--primary-focus)",
+        background: "var(--canvas)",
+        foreground: "var(--ink)",
         card: {
-          DEFAULT: "#ffffff",
-          foreground: "#1d1d1f",
+          DEFAULT: "var(--canvas)",
+          foreground: "var(--ink)",
         },
         muted: {
-          DEFAULT: "#f5f5f7",
-          foreground: "#7a7a7a",
+          DEFAULT: "var(--canvas-parchment)",
+          foreground: "rgba(128,128,128,0.48)",
         },
       },
       spacing: {

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { callApi } from '../../services/api';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { PWAInstallPrompt } from '../ui/PWAInstallPrompt';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -31,7 +32,9 @@ import {
   MessageSquare,
   Folder,
   Trophy,
-  FileText
+  FileText,
+  Moon,
+  Sun
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -48,6 +51,7 @@ interface SidebarSection {
 
 export const AppShell: React.FC = () => {
   const { profile, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -55,8 +59,9 @@ export const AppShell: React.FC = () => {
   // Native Android & Capacitor lifecycle configuration
   useEffect(() => {
     try {
-      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
-      StatusBar.setBackgroundColor({ color: '#ffffff' }).catch(() => {});
+      const isDark = document.documentElement.classList.contains('dark');
+      StatusBar.setStyle({ style: isDark ? Style.Light : Style.Dark }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: isDark ? '#1c1c1e' : '#ffffff' }).catch(() => {});
       StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
     } catch {
       // Web fallback
@@ -350,6 +355,18 @@ export const AppShell: React.FC = () => {
             )}
           </div>
 
+          {/* Dark mode toggle button */}
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            className="p-xs text-ink-muted48 hover:text-ink hover:bg-ink-muted8 rounded-md transition"
+          >
+            {theme === 'dark'
+              ? <Sun className="w-[18px] h-[18px]" />
+              : <Moon className="w-[18px] h-[18px]" />
+            }
+          </button>
+
           <div className="hidden sm:flex flex-col text-right">
             <span className="text-caption-strong font-semibold text-ink leading-tight">{profile?.name}</span>
             <span className="text-[11px] text-ink-muted48 uppercase tracking-wider font-semibold">
@@ -462,7 +479,7 @@ export const AppShell: React.FC = () => {
         )}
 
         {/* 4. MAIN BODY CONTAINER (Flex expansion, padding margins) */}
-        <main className="flex-1 bg-canvas p-md sm:p-lg md:p-xl overflow-x-hidden relative main-safe md:pb-xl safe-left safe-right">
+        <main className="flex-1 bg-canvas p-[16px] sm:p-lg md:p-xl overflow-x-hidden relative main-safe md:pb-xl">
           <div className="max-w-[1200px] mx-auto animate-fade-in">
             <Outlet />
           </div>
