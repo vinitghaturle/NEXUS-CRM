@@ -170,6 +170,12 @@ export const AppShell: React.FC = () => {
           roles: []
         },
         {
+          name: 'Meetings',
+          path: '/meetings',
+          icon: <MessageSquare className="w-[18px] h-[18px] stroke-[1.5]" />,
+          roles: []
+        },
+        {
           name: 'Teams',
           path: '/teams',
           icon: <Users className="w-[18px] h-[18px] stroke-[1.5]" />,
@@ -233,12 +239,6 @@ export const AppShell: React.FC = () => {
           name: 'Issues Tracker',
           path: '/issues',
           icon: <AlertTriangle className="w-[18px] h-[18px] stroke-[1.5]" />,
-          roles: ['ADMIN']
-        },
-        {
-          name: 'Meetings Log',
-          path: '/meetings',
-          icon: <MessageSquare className="w-[18px] h-[18px] stroke-[1.5]" />,
           roles: ['ADMIN']
         },
         {

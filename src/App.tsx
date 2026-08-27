@@ -62,6 +62,7 @@ function App() {
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="events" element={<EventsPage />} />
               <Route path="tasks" element={<TaskBoardPage />} />
+              <Route path="meetings" element={<MeetingsPage />} />
 
               {/* Teams — visible to PRESIDENT, VP, ADMIN */}
               <Route 
@@ -127,14 +128,6 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['ADMIN']}>
                     <IssuesPage />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="meetings" 
-                element={
-                  <ProtectedRoute allowedRoles={['ADMIN']}>
-                    <MeetingsPage />
                   </ProtectedRoute>
                 } 
               />

@@ -6,9 +6,6 @@ import { Loading, ErrorState } from '../../components/ui/StateIndicator';
 import { 
   Plus, 
   Search,
-  Calendar,
-  Paperclip,
-  TrendingUp,
   X,
   MessageCircle,
   CheckCircle2,
@@ -16,10 +13,25 @@ import {
   ShieldCheck,
   RotateCcw,
   Send,
-  Trash2
+  Trash2,
+  Layers,
+  Users2,
+  Sliders,
+  ExternalLink
 } from 'lucide-react';
 
-interface Task {
+export interface DepartmentAssignment {
+  teamId: string;
+  teamName?: string;
+  assignedTo: string;
+  assigneeName?: string;
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'VERIFY' | 'COMPLETED' | 'BLOCKED' | string;
+  progress: number;
+  remarks?: string;
+  lastUpdated?: string;
+}
+
+export interface Task {
   taskId: string;
   eventId: string;
   projectId: string;
@@ -34,6 +46,7 @@ interface Task {
   deadline: string;
   status: string;
   completionPercent: number;
+  departmentAssignments?: string | DepartmentAssignment[];
   remarks: string;
   rejectionRemarks?: string;
   completionDate: string;
@@ -62,6 +75,17 @@ interface EventItem {
   eventName: string;
 }
 
+export function parseDepartmentAssignments(raw?: string | DepartmentAssignment[]): DepartmentAssignment[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 const LANES = [
   { id: 'NOT_STARTED', title: 'Not Started', color: 'bg-slate-100 dark:bg-slate-900/40 text-slate-800 dark:text-slate-200 border-slate-200/50' },
   { id: 'IN_PROGRESS', title: 'In Progress', color: 'bg-blue-50/50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-200 border-blue-200/40' },
@@ -80,7 +104,6 @@ export const TaskBoardPage: React.FC = () => {
 
   // Selected Task for detailed view / edit
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   // Filters State
@@ -91,7 +114,7 @@ export const TaskBoardPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const handleWhatsAppReminder = (e: React.MouseEvent, t: Task) => {
-    e.stopPropagation(); // Stop edit modal from triggering
+    e.stopPropagation();
     const user = users.find(u => u.userId === t.assignedTo);
     if (!user) {
       alert("This task is not assigned to any user.");
@@ -138,65 +161,44 @@ export const TaskBoardPage: React.FC = () => {
   // Direct URL Task Link Handler (?taskId=TSK-XXXX)
   useEffect(() => {
     if (tasks.length > 0) {
-      const params = new URLSearchParams(window.location.search);
-      const targetTaskId = params.get('taskId');
-      if (targetTaskId) {
-        const found = tasks.find(t => t.taskId === targetTaskId);
+      const urlParams = new URLSearchParams(window.location.search);
+      const directTaskId = urlParams.get('taskId');
+      if (directTaskId) {
+        const found = tasks.find(t => t.taskId === directTaskId);
         if (found) {
           setSelectedTask(found);
-          setIsEditModalOpen(true);
         }
       }
     }
   }, [tasks]);
 
-  // Mutate task status (optimistic update)
+  // Mutations
   const updateStatusMutation = useMutation({
-    mutationFn: ({ taskId, status, remarks }: { taskId: string; status: string; remarks?: string }) => 
-      callApi('tasks.updateStatus', { taskId, status, remarks: remarks || 'Moved lane on Kanban Board.' }),
-    onMutate: async ({ taskId, status }) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks'] });
-      const previousTasks = queryClient.getQueryData<Task[]>(['tasks']);
-
-      if (previousTasks) {
-        queryClient.setQueryData<Task[]>(['tasks'], 
-          previousTasks.map(t => t.taskId === taskId ? { 
-            ...t, 
-            status, 
-            completionPercent: (status === 'COMPLETED' || status === 'VERIFY') ? 100 : status === 'NOT_STARTED' ? 0 : t.completionPercent 
-          } : t)
-        );
-      }
-      return { previousTasks };
-    },
-    onError: (err, _variables, context) => {
-      if (context?.previousTasks) {
-        queryClient.setQueryData(['tasks'], context.previousTasks);
-      }
-      alert(`Failed to update status: ${err instanceof Error ? err.message : 'Unauthorized action'}`);
-    },
-    onSettled: () => {
+    mutationFn: ({ taskId, status, remarks }: { taskId: string; status: string; remarks?: string }) =>
+      callApi('tasks.updateStatus', { taskId, status, remarks: remarks || `Moved to ${status} via Kanban drag.` }),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (err) => {
+      alert(`Update failed: ${err instanceof Error ? err.message : 'Unauthorized'}`);
     }
   });
 
-  // Mutate update full task fields
-  const updateTaskMutation = useMutation({
-    mutationFn: ({ taskId, data }: { taskId: string; data: Partial<Task> & { remarks?: string } }) => 
-      callApi('tasks.update', { taskId, ...data }),
+  const editTaskMutation = useMutation({
+    mutationFn: ({ taskId, payload }: { taskId: string; payload: any }) =>
+      callApi('tasks.update', { taskId, ...payload }),
     onSuccess: () => {
-      setIsEditModalOpen(false);
       setSelectedTask(null);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
     onError: (err) => {
-      alert(`Failed to update task: ${err instanceof Error ? err.message : 'Unauthorized'}`);
+      alert(`Failed to save task: ${err instanceof Error ? err.message : 'Unauthorized'}`);
     }
   });
 
-  // Mutate create task
   const createTaskMutation = useMutation({
-    mutationFn: (data: Partial<Task>) => callApi('tasks.create', data),
+    mutationFn: (newTaskPayload: any) =>
+      callApi('tasks.create', newTaskPayload),
     onSuccess: () => {
       setIsCreateModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -206,12 +208,10 @@ export const TaskBoardPage: React.FC = () => {
     }
   });
 
-  // Mutate Submit for Verification
   const submitVerificationMutation = useMutation({
     mutationFn: ({ taskId, remarks, verifierId }: { taskId: string; remarks?: string; verifierId?: string }) =>
       callApi('tasks.submitForVerification', { taskId, verifierId, remarks: remarks || 'Submitted for verification.' }),
     onSuccess: () => {
-      setIsEditModalOpen(false);
       setSelectedTask(null);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
@@ -220,12 +220,10 @@ export const TaskBoardPage: React.FC = () => {
     }
   });
 
-  // Mutate Verify (Approve)
   const verifyMutation = useMutation({
     mutationFn: ({ taskId, remarks }: { taskId: string; remarks?: string }) =>
       callApi('tasks.verify', { taskId, remarks: remarks || 'Verified and approved.' }),
     onSuccess: () => {
-      setIsEditModalOpen(false);
       setSelectedTask(null);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
@@ -234,12 +232,10 @@ export const TaskBoardPage: React.FC = () => {
     }
   });
 
-  // Mutate Reject (Request changes)
   const rejectMutation = useMutation({
     mutationFn: ({ taskId, remarks }: { taskId: string; remarks: string }) =>
       callApi('tasks.reject', { taskId, remarks }),
     onSuccess: () => {
-      setIsEditModalOpen(false);
       setSelectedTask(null);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
@@ -248,11 +244,9 @@ export const TaskBoardPage: React.FC = () => {
     }
   });
 
-  // Mutate delete task
   const deleteTaskMutation = useMutation({
     mutationFn: (taskId: string) => callApi('tasks.delete', { taskId }),
     onSuccess: () => {
-      setIsEditModalOpen(false);
       setSelectedTask(null);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
@@ -261,23 +255,26 @@ export const TaskBoardPage: React.FC = () => {
     }
   });
 
-  // Check if current user can delete task (Creator or Executive)
+  // Permissions helpers
   const canDeleteTask = (task: Task) => {
     if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
     if (task.assignedBy && task.assignedBy === myUserId) return true;
     return false;
   };
 
-  // Check if current user can edit/modify task status or progress (Creator, Assignee, Team Lead, Executive)
   const canEditTask = (task: Task) => {
     if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
     if (role === 'LEAD' && task.teamId === myTeamId) return true;
     if (task.assignedBy && task.assignedBy === myUserId) return true;
     if (task.assignedTo && task.assignedTo === myUserId) return true;
+    
+    // Multi-department sub-assignee check
+    const subs = parseDepartmentAssignments(task.departmentAssignments);
+    if (subs.some(s => s.assignedTo === myUserId || (role === 'LEAD' && s.teamId === myTeamId))) return true;
+    
     return false;
   };
 
-  // Check if current user can edit administrative/detail fields (Creator, Team Lead, Executive)
   const canEditAdminFields = (task: Task) => {
     if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
     if (role === 'LEAD' && task.teamId === myTeamId) return true;
@@ -285,7 +282,6 @@ export const TaskBoardPage: React.FC = () => {
     return false;
   };
 
-  // Check if current user is authorized to verify/approve/reject task
   const canVerifyTask = (task: Task) => {
     if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
     if (role === 'LEAD' && task.teamId === myTeamId) return true;
@@ -294,7 +290,7 @@ export const TaskBoardPage: React.FC = () => {
     return false;
   };
 
-  // Drag and Drop implementation
+  // Drag and Drop
   const handleDragStart = (e: React.DragEvent, task: Task) => {
     e.dataTransfer.setData('text/plain', task.taskId);
   };
@@ -316,7 +312,6 @@ export const TaskBoardPage: React.FC = () => {
     }
   };
 
-  // Calculations for Metrics Bar
   const today = new Date();
   today.setHours(0,0,0,0);
 
@@ -341,16 +336,19 @@ export const TaskBoardPage: React.FC = () => {
     });
 
     const completionRate = Math.round((completed / total) * 100);
-
     return { total, completed, completionRate, delayed, blocked, overdue, verify };
   };
 
   const metrics = calculateMetrics();
 
-  // Apply filters to tasks list
+  // Filtering
   const filteredTasks = tasks.filter(task => {
-    if (filterTeam && task.teamId !== filterTeam) return false;
-    if (filterAssignee && task.assignedTo !== filterAssignee) return false;
+    const subs = parseDepartmentAssignments(task.departmentAssignments);
+    const inSubTeams = subs.some(s => s.teamId === filterTeam);
+    const inSubAssignees = subs.some(s => s.assignedTo === filterAssignee);
+
+    if (filterTeam && task.teamId !== filterTeam && !inSubTeams) return false;
+    if (filterAssignee && task.assignedTo !== filterAssignee && !inSubAssignees) return false;
     if (filterEvent && task.eventId !== filterEvent) return false;
     if (filterPriority && task.priority !== filterPriority) return false;
     if (searchQuery) {
@@ -379,7 +377,7 @@ export const TaskBoardPage: React.FC = () => {
   };
 
   if (tasksLoading) {
-    return <Loading message="Loading Kanban lanes..." />;
+    return <Loading message="Loading Kanban lanes & task assignments..." />;
   }
 
   if (tasksError) {
@@ -394,124 +392,100 @@ export const TaskBoardPage: React.FC = () => {
 
   return (
     <div className="space-y-lg animate-fade-in text-left">
-      
       {/* 1. Header with Quick Metrics */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-md">
         <div className="space-y-xxs">
-          <span className="text-primary font-semibold text-caption-strong uppercase tracking-wider">Department Board</span>
+          <div className="flex items-center gap-xs">
+            <span className="text-primary font-semibold text-caption-strong uppercase">Workflow Kanban</span>
+            <span className="bg-primary/10 text-primary text-[11px] font-semibold px-xs py-[2px] rounded-pill">Multi-Team Sync</span>
+          </div>
           <h1 className="text-display-md font-bold text-ink tracking-tight">Task Board</h1>
-          <p className="text-caption-spec text-ink-muted48">Track workloads, verification milestones, and task deliverables.</p>
+          <p className="text-caption-spec text-ink-muted48">
+            Manage multi-department deliverables, track operator sub-progress, and verify outcomes in real-time.
+          </p>
         </div>
-        
-        {/* Create Task Action (President, VP, Leads, Admin can create tasks) */}
+
         {(role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN' || role === 'LEAD') && (
-          <button 
+          <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="apple-btn-primary flex items-center justify-center py-[10px] px-lg select-none active:scale-[0.98] transition-all self-start md:self-center"
+            className="apple-btn-primary flex items-center gap-xs py-[10px] px-lg shrink-0 shadow-sm"
           >
-            <Plus className="w-4 h-4 mr-xs" />
-            New Task
+            <Plus className="w-4 h-4" /> New Task
           </button>
         )}
       </div>
 
-      {/* 2. Metrics Strip — horizontal scroll on mobile */}
-      <div className="overflow-x-auto -mx-lg px-lg sm:mx-0 sm:px-0">
-        <div className="flex sm:grid sm:grid-cols-6 min-w-[540px] sm:min-w-0 gap-0 bg-canvas-parchment/60 border border-hairline rounded-lg shadow-inner-soft divide-x divide-hairline">
-          <div className="text-center p-sm space-y-xxs flex-1">
-            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Total</span>
-            <h3 className="text-body-strong font-bold text-ink">{metrics.total}</h3>
+      {/* 2. Metrics Indicator Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-sm">
+        <div className="bg-canvas border border-hairline rounded-lg p-sm shadow-product-surface space-y-xxs">
+          <span className="text-micro-legal text-ink-muted48 font-semibold uppercase tracking-wider">Total Active</span>
+          <div className="text-[18px] font-bold text-ink">{metrics.total}</div>
+        </div>
+        <div className="bg-canvas border border-hairline rounded-lg p-sm shadow-product-surface space-y-xxs">
+          <span className="text-micro-legal text-ink-muted48 font-semibold uppercase tracking-wider">Completed</span>
+          <div className="text-[18px] font-bold text-green-600 flex items-center justify-between">
+            <span>{metrics.completed}</span>
+            <span className="text-[11px] font-mono text-ink-muted48 font-normal">{metrics.completionRate}%</span>
           </div>
-          <div className="text-center p-sm space-y-xxs flex-1">
-            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Done %</span>
-            <h3 className="text-body-strong font-bold text-green-600 flex items-center justify-center gap-[4px]">
-              <TrendingUp className="w-3.5 h-3.5" /> {metrics.completionRate}%
-            </h3>
-          </div>
-          <div className="text-center p-sm space-y-xxs flex-1">
-            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Verify</span>
-            <h3 className="text-body-strong font-bold text-purple-600">
-              {metrics.verify}
-            </h3>
-          </div>
-          <div className="text-center p-sm space-y-xxs flex-1">
-            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Overdue</span>
-            <h3 className={`text-body-strong font-bold ${metrics.overdue > 0 ? 'text-red-500' : 'text-ink'}`}>
-              {metrics.overdue}
-            </h3>
-          </div>
-          <div className="text-center p-sm space-y-xxs flex-1">
-            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Delayed</span>
-            <h3 className="text-body-strong font-bold text-amber-600">{metrics.delayed}</h3>
-          </div>
-          <div className="text-center p-sm space-y-xxs flex-1">
-            <span className="text-[10px] text-ink-muted48 font-semibold uppercase">Done</span>
-            <h3 className="text-body-strong font-bold text-green-700">{metrics.completed}</h3>
-          </div>
+        </div>
+        <div className="bg-canvas border border-hairline rounded-lg p-sm shadow-product-surface space-y-xxs">
+          <span className="text-micro-legal text-ink-muted48 font-semibold uppercase tracking-wider">Verification</span>
+          <div className="text-[18px] font-bold text-purple-600">{metrics.verify}</div>
+        </div>
+        <div className="bg-canvas border border-hairline rounded-lg p-sm shadow-product-surface space-y-xxs">
+          <span className="text-micro-legal text-ink-muted48 font-semibold uppercase tracking-wider">Overdue</span>
+          <div className="text-[18px] font-bold text-red-600">{metrics.overdue}</div>
+        </div>
+        <div className="bg-canvas border border-hairline rounded-lg p-sm shadow-product-surface space-y-xxs">
+          <span className="text-micro-legal text-ink-muted48 font-semibold uppercase tracking-wider">Delayed</span>
+          <div className="text-[18px] font-bold text-amber-600">{metrics.delayed}</div>
+        </div>
+        <div className="bg-canvas border border-hairline rounded-lg p-sm shadow-product-surface space-y-xxs">
+          <span className="text-micro-legal text-ink-muted48 font-semibold uppercase tracking-wider">Blocked</span>
+          <div className="text-[18px] font-bold text-red-700">{metrics.blocked}</div>
         </div>
       </div>
 
-      {/* 3. Filters Control Bar */}
-      <div className="bg-canvas border border-hairline rounded-lg shadow-product-surface p-md space-y-sm">
-        {/* Search */}
-        <div className="relative">
-          <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-ink-muted32">
-            <Search className="w-4 h-4" />
-          </span>
-          <input
+      {/* 3. Search & Filter Bar */}
+      <div className="flex flex-col lg:flex-row gap-sm items-stretch lg:items-center justify-between bg-canvas border border-hairline rounded-lg p-sm shadow-product-surface">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 absolute left-sm top-1/2 -translate-y-1/2 text-ink-muted48" />
+          <input 
             type="text"
-            placeholder="Search tasks by title, desc, ID..."
+            placeholder="Search by task title, description, or TSK-ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-canvas border border-hairline rounded-md pl-[36px] pr-sm py-[9px] text-[13px] text-ink placeholder-ink-muted32 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition"
+            className="w-full bg-transparent pl-[32px] pr-sm py-[6px] text-[13px] text-ink focus:outline-none placeholder:text-ink-muted48"
           />
         </div>
 
-        {/* Filter dropdowns */}
-        <div className="flex flex-wrap items-center gap-sm">
-          {/* Team filter */}
+        <div className="flex flex-wrap items-center gap-xs border-t lg:border-t-0 border-hairline pt-xs lg:pt-0">
           <select
             value={filterTeam}
             onChange={(e) => setFilterTeam(e.target.value)}
-            className="flex-1 min-w-[110px] bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
+            className="bg-canvas border border-hairline rounded-md px-sm py-[6px] text-[12px] text-ink focus:outline-none"
           >
-            <option value="">All Teams</option>
+            <option value="">All Departments</option>
             {teams.map(t => (
               <option key={t.teamId} value={t.teamId}>{t.teamName}</option>
             ))}
           </select>
 
-          {/* Assignee filter */}
           <select
             value={filterAssignee}
             onChange={(e) => setFilterAssignee(e.target.value)}
-            className="flex-1 min-w-[120px] bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
+            className="bg-canvas border border-hairline rounded-md px-sm py-[6px] text-[12px] text-ink focus:outline-none"
           >
-            <option value="">All Members</option>
-            <option value={myUserId}>Assigned to Me</option>
+            <option value="">All Assignees</option>
             {users.map(u => (
               <option key={u.userId} value={u.userId}>{u.name}</option>
             ))}
           </select>
 
-          {/* Priority filter */}
-          <select
-            value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
-            className="flex-1 min-w-[100px] bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
-          >
-            <option value="">All Priority</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
-
-          {/* Event filter */}
           <select
             value={filterEvent}
             onChange={(e) => setFilterEvent(e.target.value)}
-            className="flex-1 min-w-[120px] bg-canvas border border-hairline rounded-md px-sm py-[8px] text-[13px] text-ink focus:border-primary focus:outline-none"
+            className="bg-canvas border border-hairline rounded-md px-sm py-[6px] text-[12px] text-ink focus:outline-none"
           >
             <option value="">All Events</option>
             {events.map(ev => (
@@ -519,7 +493,18 @@ export const TaskBoardPage: React.FC = () => {
             ))}
           </select>
 
-          {/* Reset Filters button */}
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            className="bg-canvas border border-hairline rounded-md px-sm py-[6px] text-[12px] text-ink focus:outline-none"
+          >
+            <option value="">All Priorities</option>
+            <option value="LOW">Low</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HIGH">High</option>
+            <option value="CRITICAL">Critical</option>
+          </select>
+
           {(filterTeam || filterAssignee || filterEvent || filterPriority || searchQuery) && (
             <button 
               onClick={() => {
@@ -529,19 +514,18 @@ export const TaskBoardPage: React.FC = () => {
                 setFilterPriority('');
                 setSearchQuery('');
               }}
-              className="text-[12px] text-primary font-semibold hover:underline whitespace-nowrap"
+              className="text-[12px] text-primary font-semibold hover:underline whitespace-nowrap px-xs"
             >
-              Reset Filters
+              Reset
             </button>
           )}
         </div>
       </div>
 
-      {/* 4. Kanban lanes board */}
+      {/* 4. Kanban Lanes Board */}
       <div className="overflow-x-auto -mx-lg px-lg sm:-mx-xl sm:px-xl md:mx-0 md:px-0 pb-lg">
         <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-md min-w-[1100px] md:min-w-0 select-none snap-x snap-mandatory md:snap-none">
           {LANES.map(lane => {
-            // In Progress lane also hosts tasks marked REJECTED (needs changes)
             const laneTasks = filteredTasks.filter(t => {
               if (lane.id === 'IN_PROGRESS') {
                 return t.status === 'IN_PROGRESS' || t.status === 'REJECTED';
@@ -573,8 +557,7 @@ export const TaskBoardPage: React.FC = () => {
                   ) : (
                     laneTasks.map(task => {
                       const assigneeName = users.find(u => u.userId === task.assignedTo)?.name || 'Unassigned';
-                      const eventName = events.find(e => e.eventId === task.eventId)?.eventName || '';
-                      const taskOverdue = isOverdue(task);
+                      const subAssignments = parseDepartmentAssignments(task.departmentAssignments);
                       const isRejected = task.status === 'REJECTED';
                       const isUnderVerification = task.status === 'VERIFY';
 
@@ -583,10 +566,7 @@ export const TaskBoardPage: React.FC = () => {
                           key={task.taskId}
                           draggable
                           onDragStart={(e) => handleDragStart(e, task)}
-                          onClick={() => {
-                            setSelectedTask(task);
-                            setIsEditModalOpen(true);
-                          }}
+                          onClick={() => setSelectedTask(task)}
                           className={`bg-canvas border rounded-md p-md shadow-product-surface space-y-xs cursor-pointer hover:border-primary hover:shadow-md transition-all active:scale-[0.98] text-left ${
                             isRejected 
                               ? 'border-red-300 bg-red-50/20' 
@@ -598,6 +578,11 @@ export const TaskBoardPage: React.FC = () => {
                           <div className="flex items-start justify-between gap-xs">
                             <span className="text-[10px] font-mono text-ink-muted32 font-bold">{task.taskId}</span>
                             <div className="flex items-center gap-[4px]">
+                              {isOverdue(task) && (
+                                <span className="px-xxs py-[1px] text-[8.5px] font-bold bg-red-100 text-red-700 rounded-sm">
+                                  Overdue
+                                </span>
+                              )}
                               {isRejected && (
                                 <span className="px-xxs py-[1px] text-[8.5px] font-bold bg-red-100 text-red-700 rounded-sm">
                                   Changes Needed
@@ -606,6 +591,11 @@ export const TaskBoardPage: React.FC = () => {
                               {isUnderVerification && (
                                 <span className="px-xxs py-[1px] text-[8.5px] font-bold bg-purple-100 text-purple-700 rounded-sm">
                                   Under Review
+                                </span>
+                              )}
+                              {subAssignments.length > 0 && (
+                                <span className="px-xxs py-[1px] text-[8.5px] font-bold bg-blue-100 text-blue-700 rounded-sm flex items-center gap-[2px]">
+                                  <Layers className="w-2.5 h-2.5" /> Multi-Team
                                 </span>
                               )}
                               <span className={`px-xxs py-[1px] text-[9px] font-semibold border rounded-sm uppercase tracking-wider font-mono ${getPriorityColor(task.priority)}`}>
@@ -621,63 +611,73 @@ export const TaskBoardPage: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Rejection Note if present */}
+                          {/* Rejection Note */}
                           {isRejected && task.rejectionRemarks && (
                             <div className="p-xs bg-red-50 border border-red-200 rounded text-[10px] text-red-700 leading-snug">
                               <strong>Feedback:</strong> {task.rejectionRemarks}
                             </div>
                           )}
 
-                          {/* Progress */}
-                          <div className="space-y-xxs pt-xxs">
-                            <div className="flex items-center justify-between text-[10px] text-ink-muted48 font-mono">
-                              <span>Progress</span>
-                              <span>{task.completionPercent || 0}%</span>
+                          {/* Multi-Department Sub-Progress Section */}
+                          {subAssignments.length > 0 ? (
+                            <div className="space-y-[3px] pt-xxs border-t border-hairline">
+                              <span className="text-[9.5px] font-bold uppercase tracking-wider text-ink-muted48 flex items-center justify-between">
+                                <span>Department Progress:</span>
+                                <span className="font-mono text-primary font-bold">{task.completionPercent || 0}% Total</span>
+                              </span>
+                              <div className="space-y-[3px]">
+                                {subAssignments.map((sub, sIdx) => (
+                                  <div key={sIdx} className="bg-canvas-parchment/60 border border-hairline rounded px-xs py-[2px] text-[10px] flex items-center justify-between">
+                                    <span className="font-semibold text-ink truncate max-w-[85px]">
+                                      {sub.teamName || sub.teamId}:
+                                    </span>
+                                    <div className="flex items-center gap-xs">
+                                      <span className="text-ink-muted80 font-mono font-bold">{sub.progress || 0}%</span>
+                                      <span className={`text-[8.5px] font-bold px-[3px] py-[1px] rounded ${
+                                        sub.progress === 100 || sub.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                                        sub.status === 'VERIFY' ? 'bg-purple-100 text-purple-700' :
+                                        sub.progress > 0 ? 'bg-blue-100 text-blue-700' :
+                                        'bg-slate-100 text-slate-600'
+                                      }`}>
+                                        {sub.status || (sub.progress === 0 ? 'NOT_STARTED' : 'IN_PROGRESS')}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                            <div className="w-full bg-ink-muted8 h-[4px] rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full transition-all duration-300 ${
-                                  task.status === 'COMPLETED' ? 'bg-green-500' : isUnderVerification ? 'bg-purple-500' : 'bg-primary'
-                                }`} 
-                                style={{ width: `${task.completionPercent || 0}%` }}
-                              ></div>
+                          ) : (
+                            /* Standard Single-Task Progress Bar */
+                            <div className="space-y-xxs pt-xxs">
+                              <div className="flex items-center justify-between text-[10px] text-ink-muted48 font-mono">
+                                <span>Progress</span>
+                                <span>{task.completionPercent || 0}%</span>
+                              </div>
+                              <div className="w-full bg-ink-muted8 h-[4px] rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-300 ${
+                                    task.status === 'COMPLETED' ? 'bg-green-500' : isUnderVerification ? 'bg-purple-500' : 'bg-primary'
+                                  }`} 
+                                  style={{ width: `${task.completionPercent || 0}%` }}
+                                ></div>
+                              </div>
                             </div>
-                          </div>
+                          )}
 
                           <div className="border-t border-hairline pt-xxs flex items-center justify-between text-[10px] text-ink-muted48">
-                            <span className="truncate max-w-[100px] flex items-center gap-xxs" title={`Assignee: ${assigneeName}`}>
-                              👤 {assigneeName}
-                              {task.assignedTo && (
-                                <button 
-                                  onClick={(e) => handleWhatsAppReminder(e, task)}
-                                  title="Remind via WhatsApp"
-                                  className="p-[2px] hover:bg-green-50 text-green-600 rounded transition shrink-0"
-                                >
-                                  <MessageCircle className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                            <span className="truncate max-w-[110px] flex items-center gap-xxs" title={assigneeName}>
+                              👤 {subAssignments.length > 0 ? `${subAssignments.length} Teams Assigned` : assigneeName}
                             </span>
-                            
-                            {task.deadline && (
-                              <span className={`flex items-center gap-[2px] font-mono ${
-                                taskOverdue ? 'text-red-500 font-semibold' : ''
-                              }`}>
-                                <Calendar className="w-3 h-3" />
-                                {new Date(task.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-                              </span>
+                            {task.assignedTo && (
+                              <button 
+                                onClick={(e) => handleWhatsAppReminder(e, task)}
+                                className="p-[2px] hover:bg-green-50 hover:text-green-600 rounded transition"
+                                title="Send WhatsApp Reminder"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5 text-green-600" />
+                              </button>
                             )}
                           </div>
-
-                          {eventName && (
-                            <div className="text-[9px] text-primary bg-primary/5 px-xxs py-[2px] rounded-sm truncate" title={`Event: ${eventName}`}>
-                              🎯 {eventName}
-                            </div>
-                          )}
-                          {task.driveLink && (
-                            <div className="flex items-center gap-xxs text-[9px] text-ink-muted48">
-                              <Paperclip className="w-2.5 h-2.5" /> Google Drive Link
-                            </div>
-                          )}
                         </div>
                       );
                     })
@@ -689,64 +689,88 @@ export const TaskBoardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 5. Create Task Modal */}
+      {/* CREATE TASK MODAL */}
       {isCreateModalOpen && (
-        <CreateTaskModal 
+        <CreateTaskModal
           teams={teams}
           users={users}
           events={events}
           onSubmit={(data) => createTaskMutation.mutate(data)}
+          isSubmitting={createTaskMutation.isPending}
           onClose={() => setIsCreateModalOpen(false)}
         />
       )}
 
-      {/* 6. Edit / View Task Modal */}
-      {isEditModalOpen && selectedTask && (
-        <EditTaskModal 
+      {/* EDIT / VIEW TASK MODAL */}
+      {selectedTask && (
+        <EditTaskModal
           task={selectedTask}
-          teams={teams}
           users={users}
-          events={events}
           myUserId={myUserId}
           canEditTask={canEditTask(selectedTask)}
           canEditAdminFields={canEditAdminFields(selectedTask)}
           canVerifyTask={canVerifyTask(selectedTask)}
           canDeleteTask={canDeleteTask(selectedTask)}
           onDeleteTask={(taskId) => deleteTaskMutation.mutate(taskId)}
-          onSubmit={(taskId, data) => updateTaskMutation.mutate({ taskId, data })}
+          onSubmit={(taskId, payload) => editTaskMutation.mutate({ taskId, payload })}
           onSubmitForVerification={(taskId, remarks, verifierId) => submitVerificationMutation.mutate({ taskId, remarks, verifierId })}
           onVerify={(taskId, remarks) => verifyMutation.mutate({ taskId, remarks })}
           onReject={(taskId, remarks) => rejectMutation.mutate({ taskId, remarks })}
-          isSubmitting={updateTaskMutation.isPending || submitVerificationMutation.isPending || verifyMutation.isPending || rejectMutation.isPending || deleteTaskMutation.isPending}
-          onClose={() => {
-            setIsEditModalOpen(false);
-            setSelectedTask(null);
-          }}
+          isSubmitting={editTaskMutation.isPending || submitVerificationMutation.isPending || verifyMutation.isPending || rejectMutation.isPending}
+          onClose={() => setSelectedTask(null)}
         />
       )}
-
     </div>
   );
 };
 
-/* --- CREATE TASK MODAL COMPONENT --- */
+/* -------------------------------------------------------------
+ * CREATE TASK MODAL COMPONENT (WITH MULTI-DEPARTMENT SUPPORT)
+ * ------------------------------------------------------------- */
 interface CreateModalProps {
   teams: Team[];
   users: User[];
   events: EventItem[];
-  onSubmit: (data: Partial<Task>) => void;
+  onSubmit: (data: any) => void;
+  isSubmitting: boolean;
   onClose: () => void;
 }
-const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onSubmit, onClose }) => {
+
+const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onSubmit, isSubmitting, onClose }) => {
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
-  const [team, setTeam] = useState('');
-  const [assignee, setAssignee] = useState('');
-  const [verifier, setVerifier] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [deadline, setDeadline] = useState('');
   const [eventVal, setEventVal] = useState('');
   const [drive, setDrive] = useState('');
+  const [verifier, setVerifier] = useState('');
+
+  // Multi-department assignment state
+  const [isMultiDept, setIsMultiDept] = useState(false);
+  const [singleTeam, setSingleTeam] = useState('');
+  const [singleAssignee, setSingleAssignee] = useState('');
+
+  // Multi-department rows: [{ teamId, assignedTo }]
+  const [deptRows, setDeptRows] = useState<{ teamId: string; assignedTo: string }[]>([
+    { teamId: teams[0]?.teamId || '', assignedTo: '' }
+  ]);
+
+  const handleAddDeptRow = () => {
+    setDeptRows([...deptRows, { teamId: '', assignedTo: '' }]);
+  };
+
+  const handleRemoveDeptRow = (index: number) => {
+    setDeptRows(deptRows.filter((_, idx) => idx !== index));
+  };
+
+  const handleUpdateDeptRow = (index: number, field: 'teamId' | 'assignedTo', val: string) => {
+    const updated = [...deptRows];
+    updated[index][field] = val;
+    if (field === 'teamId') {
+      updated[index].assignedTo = '';
+    }
+    setDeptRows(updated);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -754,24 +778,59 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
       alert("Title is required!");
       return;
     }
-    onSubmit({
+
+    let departmentAssignments: DepartmentAssignment[] = [];
+    if (isMultiDept) {
+      const validRows = deptRows.filter(r => r.teamId);
+      if (validRows.length === 0) {
+        alert("Please select at least one department for multi-team task.");
+        return;
+      }
+      departmentAssignments = validRows.map(r => {
+        const teamObj = teams.find(t => t.teamId === r.teamId);
+        const userObj = users.find(u => u.userId === r.assignedTo);
+        return {
+          teamId: r.teamId,
+          teamName: teamObj?.teamName || r.teamId,
+          assignedTo: r.assignedTo,
+          assigneeName: userObj?.name || 'Unassigned',
+          status: 'NOT_STARTED',
+          progress: 0,
+          remarks: ''
+        };
+      });
+    }
+
+    const payload: any = {
       taskTitle: title,
       taskDescription: desc,
-      teamId: team,
-      assignedTo: assignee,
-      verifierId: verifier || undefined,
       priority,
       deadline: deadline || undefined,
       eventId: eventVal,
-      driveLink: drive
-    });
+      driveLink: drive,
+      verifierId: verifier || undefined
+    };
+
+    if (isMultiDept && departmentAssignments.length > 0) {
+      payload.departmentAssignments = JSON.stringify(departmentAssignments);
+      payload.teamId = departmentAssignments[0].teamId;
+      payload.assignedTo = departmentAssignments[0].assignedTo;
+    } else {
+      payload.teamId = singleTeam;
+      payload.assignedTo = singleAssignee;
+    }
+
+    onSubmit(payload);
   };
 
   return (
     <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-md select-none font-text text-ink safe-top safe-bottom safe-left safe-right">
-      <div className="bg-canvas border border-hairline sm:rounded-lg rounded-t-xl shadow-product-surface max-w-[500px] w-full p-lg space-y-md animate-scale-up text-left max-h-[calc(90dvh-env(safe-area-inset-top,0px))] overflow-y-auto safe-bottom">
+      <div className="bg-canvas border border-hairline sm:rounded-xl rounded-t-xl shadow-product-surface max-w-[560px] w-full p-lg space-y-md animate-scale-up text-left max-h-[calc(90dvh-env(safe-area-inset-top,0px))] overflow-y-auto safe-bottom">
         <div className="flex items-center justify-between border-b border-hairline pb-xs">
-          <h3 className="text-body-strong font-bold text-ink">Initialize Operations Task</h3>
+          <div>
+            <h3 className="text-body-strong font-bold text-ink text-[16px]">Initialize Operations Task</h3>
+            <p className="text-[11px] text-ink-muted48">Create single-owner or multi-department cross-functional tasks.</p>
+          </div>
           <button onClick={onClose} className="p-xxs hover:bg-ink-muted8 rounded-md transition">
             <X className="w-4 h-4 text-ink-muted48 hover:text-ink" />
           </button>
@@ -783,7 +842,7 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
             <input
               type="text"
               required
-              placeholder="e.g. Confirm Hackathon catering count"
+              placeholder="e.g. Publish Monthly Newsletter (Content, Design & Tech Sync)"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
@@ -791,70 +850,141 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
           </div>
 
           <div className="space-y-xxs">
-            <label className="font-semibold text-caption-strong">Description</label>
+            <label className="font-semibold text-caption-strong">Description / Scope Details</label>
             <textarea
-              placeholder="Provide scope details..."
+              placeholder="Provide scope details, guidelines, and deliverables..."
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
-              className="w-full bg-canvas border border-hairline rounded-md px-sm py-[6px] text-ink focus:border-primary focus:outline-none min-h-[60px]"
+              className="w-full bg-canvas border border-hairline rounded-md px-sm py-[6px] text-ink focus:border-primary focus:outline-none min-h-[50px]"
             />
+          </div>
+
+          {/* Mode Switch: Single Department vs Multi-Department */}
+          <div className="bg-canvas-parchment/60 border border-hairline rounded-lg p-sm space-y-sm">
+            <div className="flex items-center justify-between">
+              <label className="font-bold text-[12px] text-ink flex items-center gap-xs">
+                <Users2 className="w-4 h-4 text-primary" />
+                <span>Multi-Department Assignment</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsMultiDept(!isMultiDept)}
+                className={`px-sm py-[4px] rounded-pill text-[11px] font-bold transition ${
+                  isMultiDept ? 'bg-primary text-white shadow-xs' : 'bg-ink-muted8 text-ink-muted80'
+                }`}
+              >
+                {isMultiDept ? 'Multi-Team ON' : 'Single Team'}
+              </button>
+            </div>
+
+            {isMultiDept ? (
+              <div className="space-y-xs pt-xxs">
+                <p className="text-[11px] text-ink-muted48">
+                  Assign this task across multiple departments (e.g. Design, Content, Tech). Each assignee can independently track their sub-progress.
+                </p>
+                {deptRows.map((row, idx) => (
+                  <div key={idx} className="flex items-center gap-xs bg-canvas border border-hairline rounded-md p-xs">
+                    <select
+                      value={row.teamId}
+                      onChange={(e) => handleUpdateDeptRow(idx, 'teamId', e.target.value)}
+                      className="flex-1 bg-transparent border border-hairline rounded px-xs py-[6px] text-[12px] text-ink focus:outline-none"
+                    >
+                      <option value="">Select Department</option>
+                      {teams.map(t => (
+                        <option key={t.teamId} value={t.teamId}>{t.teamName}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={row.assignedTo}
+                      onChange={(e) => handleUpdateDeptRow(idx, 'assignedTo', e.target.value)}
+                      className="flex-1 bg-transparent border border-hairline rounded px-xs py-[6px] text-[12px] text-ink focus:outline-none font-semibold text-primary"
+                    >
+                      <option value="">Select Assignee</option>
+                      {users
+                        .filter(u => !row.teamId || u.teamId === row.teamId)
+                        .map(u => (
+                          <option key={u.userId} value={u.userId}>{u.name}</option>
+                        ))
+                      }
+                    </select>
+
+                    {deptRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDeptRow(idx)}
+                        className="p-xxs text-red-500 hover:bg-red-50 rounded transition"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={handleAddDeptRow}
+                  className="apple-btn-secondary py-[4px] px-sm text-[11px] flex items-center gap-xxs font-semibold"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Another Department
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm pt-xxs">
+                <div className="space-y-xxs">
+                  <label className="font-semibold text-caption-strong">Department</label>
+                  <select
+                    value={singleTeam}
+                    onChange={(e) => {
+                      setSingleTeam(e.target.value);
+                      setSingleAssignee('');
+                    }}
+                    className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
+                  >
+                    <option value="">Unassigned Team</option>
+                    {teams.map(t => (
+                      <option key={t.teamId} value={t.teamId}>{t.teamName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-xxs">
+                  <label className="font-semibold text-caption-strong">Assignee Operator</label>
+                  <select
+                    value={singleAssignee}
+                    onChange={(e) => setSingleAssignee(e.target.value)}
+                    className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
+                  >
+                    <option value="">Unassigned User</option>
+                    {users
+                      .filter(u => !singleTeam || u.teamId === singleTeam)
+                      .map(u => (
+                        <option key={u.userId} value={u.userId}>{u.name}</option>
+                      ))
+                    }
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
             <div className="space-y-xxs">
-              <label className="font-semibold text-caption-strong">Assign Team</label>
+              <label className="font-semibold text-caption-strong">Assign Verifier (Approver)</label>
               <select
-                value={team}
-                onChange={(e) => {
-                  setTeam(e.target.value);
-                  setAssignee('');
-                }}
+                value={verifier}
+                onChange={(e) => setVerifier(e.target.value)}
                 className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
               >
-                <option value="">Unassigned Team</option>
-                {teams.map(t => (
-                  <option key={t.teamId} value={t.teamId}>{t.teamName}</option>
+                <option value="">Default (Task Assigner / Lead)</option>
+                {users.map(u => (
+                  <option key={u.userId} value={u.userId}>
+                    {u.name} ({u.role})
+                  </option>
                 ))}
               </select>
             </div>
 
-            <div className="space-y-xxs">
-              <label className="font-semibold text-caption-strong">Assign Operator (Owner)</label>
-              <select
-                value={assignee}
-                onChange={(e) => setAssignee(e.target.value)}
-                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
-              >
-                <option value="">Unassigned User</option>
-                {users
-                  .filter(u => !team || u.teamId === team)
-                  .map(u => (
-                    <option key={u.userId} value={u.userId}>{u.name}</option>
-                  ))
-                }
-              </select>
-            </div>
-          </div>
-
-          {/* Assigned Verifier Field */}
-          <div className="space-y-xxs">
-            <label className="font-semibold text-caption-strong">Assign Verifier (Approver)</label>
-            <select
-              value={verifier}
-              onChange={(e) => setVerifier(e.target.value)}
-              className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
-            >
-              <option value="">Default (Task Assigner / Department Lead)</option>
-              {users.map(u => (
-                <option key={u.userId} value={u.userId}>
-                  {u.name} ({u.role}{u.position ? ` - ${u.position}` : ''})
-                </option>
-              ))}
-            </select>
-            <p className="text-[10px] text-ink-muted48">This person will receive an email notification to review and verify when work is submitted.</p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
             <div className="space-y-xxs">
               <label className="font-semibold text-caption-strong">Priority</label>
               <select
@@ -868,7 +998,9 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
                 <option value="CRITICAL">Critical</option>
               </select>
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
             <div className="space-y-xxs">
               <label className="font-semibold text-caption-strong">Task Deadline</label>
               <input
@@ -878,9 +1010,7 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
                 className="w-full bg-canvas border border-hairline rounded-md px-sm py-[6px] text-ink focus:border-primary focus:outline-none font-mono"
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
             <div className="space-y-xxs">
               <label className="font-semibold text-caption-strong">Target Event</label>
               <select
@@ -888,38 +1018,40 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
                 onChange={(e) => setEventVal(e.target.value)}
                 className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
               >
-                <option value="">None</option>
+                <option value="">None / General Operations</option>
                 {events.map(ev => (
                   <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
                 ))}
               </select>
             </div>
+          </div>
 
-            <div className="space-y-xxs">
-              <label className="font-semibold text-caption-strong">Google Drive Asset URL</label>
-              <input
-                type="url"
-                placeholder="https://drive.google.com/..."
-                value={drive}
-                onChange={(e) => setDrive(e.target.value)}
-                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
-              />
-            </div>
+          <div className="space-y-xxs">
+            <label className="font-semibold text-caption-strong">Google Drive Asset URL</label>
+            <input
+              type="url"
+              placeholder="https://drive.google.com/..."
+              value={drive}
+              onChange={(e) => setDrive(e.target.value)}
+              className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink focus:border-primary focus:outline-none"
+            />
           </div>
 
           <div className="flex justify-end gap-sm pt-xs border-t border-hairline">
             <button
               type="button"
               onClick={onClose}
+              disabled={isSubmitting}
               className="apple-btn-secondary py-[8px] px-md select-none active:scale-[0.98] transition"
             >
               Cancel
             </button>
             <button
               type="submit"
+              disabled={isSubmitting}
               className="apple-btn-primary py-[8px] px-lg select-none active:scale-[0.98] transition"
             >
-              Initialize Task
+              {isSubmitting ? 'Creating...' : 'Initialize Task'}
             </button>
           </div>
         </form>
@@ -928,12 +1060,12 @@ const CreateTaskModal: React.FC<CreateModalProps> = ({ teams, users, events, onS
   );
 };
 
-/* --- EDIT / VIEW TASK MODAL COMPONENT --- */
+/* -------------------------------------------------------------
+ * EDIT / VIEW TASK MODAL COMPONENT (WITH SUB-PROGRESS SLIDERS)
+ * ------------------------------------------------------------- */
 interface EditModalProps {
   task: Task;
-  teams: Team[];
   users: User[];
-  events: EventItem[];
   myUserId: string;
   canEditTask: boolean;
   canEditAdminFields: boolean;
@@ -950,9 +1082,7 @@ interface EditModalProps {
 
 const EditTaskModal: React.FC<EditModalProps> = ({ 
   task, 
-  teams, 
   users, 
-  events, 
   myUserId,
   canEditTask,
   canEditAdminFields, 
@@ -966,36 +1096,77 @@ const EditTaskModal: React.FC<EditModalProps> = ({
   isSubmitting,
   onClose 
 }) => {
-  // Operational fields
+  const { profile } = useAuth();
+  const role = profile?.role || 'MEMBER';
+  const myTeamId = profile?.teamId || '';
+
   const [status, setStatus] = useState(task.status);
   const [progress, setProgress] = useState<number>(task.completionPercent || 0);
   const [remarks, setRemarks] = useState('');
 
-  // Submit for Verification dialog state
+  // Multi-department sub-assignments state
+  const [subAssignments, setSubAssignments] = useState<DepartmentAssignment[]>(() => {
+    return parseDepartmentAssignments(task.departmentAssignments);
+  });
+
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
   const [submitVerifier, setSubmitVerifier] = useState(task.verifierId || task.assignedBy || '');
   const [submitNote, setSubmitNote] = useState('');
 
-  // Rejection dialog state
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionInput, setRejectionInput] = useState('');
 
   // Administrative restricted fields
   const [title, setTitle] = useState(task.taskTitle);
   const [desc, setDesc] = useState(task.taskDescription || '');
-  const [team, setTeam] = useState(task.teamId || '');
-  const [assignee, setAssignee] = useState(task.assignedTo || '');
   const [verifier, setVerifier] = useState(task.verifierId || '');
   const [priority, setPriority] = useState(task.priority);
   const [deadline, setDeadline] = useState(task.deadline ? new Date(task.deadline).toISOString().split('T')[0] : '');
-  const [eventVal, setEventVal] = useState(task.eventId || '');
   const [drive, setDrive] = useState(task.driveLink || '');
 
-  const isOwner = task.assignedTo === myUserId;
+  const isOwner = task.assignedTo === myUserId || subAssignments.some(s => s.assignedTo === myUserId);
   const isUnderVerification = task.status === 'VERIFY';
   const isRejected = task.status === 'REJECTED';
 
   const currentVerifierName = users.find(u => u.userId === (task.verifierId || task.assignedBy))?.name || 'Assigned Verifier';
+
+  // Handle individual department sub-progress adjustment
+  const handleSubProgressChange = (index: number, newProgress: number) => {
+    const updated = [...subAssignments];
+    updated[index].progress = newProgress;
+    if (newProgress === 100) {
+      updated[index].status = 'COMPLETED';
+    } else if (newProgress > 0 && updated[index].status === 'NOT_STARTED') {
+      updated[index].status = 'IN_PROGRESS';
+    }
+    setSubAssignments(updated);
+
+    // Compute new aggregate total
+    const total = updated.reduce((acc, curr) => acc + curr.progress, 0);
+    const avg = Math.round(total / updated.length);
+    setProgress(avg);
+  };
+
+  const handleSubStatusChange = (index: number, newStatus: string) => {
+    const updated = [...subAssignments];
+    updated[index].status = newStatus;
+    if (newStatus === 'COMPLETED') {
+      updated[index].progress = 100;
+    } else if (newStatus === 'NOT_STARTED') {
+      updated[index].progress = 0;
+    }
+    setSubAssignments(updated);
+
+    const total = updated.reduce((acc, curr) => acc + curr.progress, 0);
+    const avg = Math.round(total / updated.length);
+    setProgress(avg);
+  };
+
+  const handleSubRemarksChange = (index: number, val: string) => {
+    const updated = [...subAssignments];
+    updated[index].remarks = val;
+    setSubAssignments(updated);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1007,14 +1178,15 @@ const EditTaskModal: React.FC<EditModalProps> = ({
       remarks: remarks || 'Task modified.'
     };
 
+    if (subAssignments.length > 0) {
+      payload.departmentAssignments = JSON.stringify(subAssignments);
+    }
+
     if (canEditAdminFields) {
       payload.taskTitle = title;
       payload.taskDescription = desc;
-      payload.teamId = team;
-      payload.assignedTo = assignee;
       payload.priority = priority;
       payload.deadline = deadline || null;
-      payload.eventId = eventVal;
       payload.driveLink = drive;
     }
 
@@ -1057,7 +1229,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-canvas/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-md select-none font-text text-ink safe-top safe-bottom safe-left safe-right">
-      <div className="bg-canvas border border-hairline sm:rounded-lg rounded-t-xl shadow-product-surface max-w-[540px] w-full p-lg space-y-md animate-scale-up text-left max-h-[calc(92dvh-env(safe-area-inset-top,0px))] overflow-y-auto safe-bottom">
+      <div className="bg-canvas border border-hairline sm:rounded-xl rounded-t-xl shadow-product-surface max-w-[580px] w-full p-lg space-y-md animate-scale-up text-left max-h-[calc(92dvh-env(safe-area-inset-top,0px))] overflow-y-auto safe-bottom">
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-hairline pb-xs">
@@ -1072,14 +1244,12 @@ const EditTaskModal: React.FC<EditModalProps> = ({
           </button>
         </div>
 
-        {/* 🔒 Read-Only Notice if user cannot edit */}
         {!canEditTask && (
           <div className="p-sm bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-900 flex items-center gap-xs animate-fade-in">
-            <span>🔒 <strong>Read-Only View:</strong> This task belongs to another department ({teams.find(t => t.teamId === task.teamId)?.teamName || 'another team'}). You do not have permission to modify its status or parameters.</span>
+            <span>🔒 <strong>Read-Only View:</strong> You do not have permission to modify this task.</span>
           </div>
         )}
 
-        {/* 🚨 Rejection Feedback Banner if changes requested */}
         {isRejected && task.rejectionRemarks && (
           <div className="p-md bg-red-50 border border-red-200 rounded-lg space-y-xxs animate-fade-in text-red-800">
             <div className="flex items-center gap-xs font-bold text-[13px] text-red-700">
@@ -1092,7 +1262,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({
           </div>
         )}
 
-        {/* 🔍 Verification Action Panel for Authorized Verifiers */}
+        {/* Verification Review Banner */}
         {isUnderVerification && (
           <div className="p-md bg-purple-50 border border-purple-200 rounded-lg space-y-sm animate-fade-in">
             <div className="flex items-center justify-between">
@@ -1104,9 +1274,6 @@ const EditTaskModal: React.FC<EditModalProps> = ({
                 Verifier: {currentVerifierName}
               </span>
             </div>
-            <p className="text-[12px] text-purple-800 leading-relaxed">
-              This task was submitted for verification. Deliverables are ready for evaluation.
-            </p>
             {canVerifyTask && (
               <div className="flex flex-wrap items-center gap-sm pt-xxs">
                 <button
@@ -1132,7 +1299,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({
           </div>
         )}
 
-        {/* 🚀 Submit for Verification Button for Task Owner */}
+        {/* Submit for Verification Button */}
         {canEditTask && (!isUnderVerification && task.status !== 'COMPLETED') && (isOwner || canEditAdminFields) && (
           <div className="p-sm bg-blue-50/60 border border-blue-200 rounded-lg flex items-center justify-between gap-sm">
             <div className="space-y-[2px]">
@@ -1151,7 +1318,7 @@ const EditTaskModal: React.FC<EditModalProps> = ({
           </div>
         )}
 
-        {/* Submit for Verification Modal Dialog */}
+        {/* Verification Modal Dialog */}
         {isSubmitDialogOpen && (
           <form onSubmit={handleConfirmSubmitVerification} className="p-md bg-white border-2 border-primary/40 rounded-lg shadow-md space-y-sm animate-scale-up text-left">
             <div className="space-y-xxs">
@@ -1243,79 +1410,149 @@ const EditTaskModal: React.FC<EditModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-sm text-[13px]">
           
-          {/* Section 1: Standard Progress updates */}
-          <div className="bg-canvas-parchment/30 border border-hairline rounded-md p-md space-y-sm">
-            <h4 className="text-[11px] font-bold text-primary uppercase tracking-wider">Operator Update</h4>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
-              <div className="space-y-xxs">
-                <label className="font-semibold text-caption-strong">Workflow Status</label>
-                <select
-                  disabled={!canEditTask}
-                  value={status}
-                  onChange={(e) => handleStatusChange(e.target.value)}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
-                >
-                  <option value="NOT_STARTED">Not Started</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="VERIFY">Under Verification</option>
-                  <option value="DELAYED">Delayed</option>
-                  <option value="BLOCKED">Blocked</option>
-                  <option value="COMPLETED">Completed</option>
-                </select>
+          {/* MULTI-DEPARTMENT PROGRESS BREAKDOWN SECTION */}
+          {subAssignments.length > 0 && (
+            <div className="bg-canvas-parchment/60 border border-hairline rounded-xl p-md space-y-sm">
+              <div className="flex items-center justify-between border-b border-hairline pb-xs">
+                <div className="flex items-center gap-xs font-bold text-[13px] text-ink">
+                  <Sliders className="w-4 h-4 text-primary" />
+                  <span>Department Sub-Progress Breakdown</span>
+                </div>
+                <span className="text-[11px] font-mono font-bold bg-primary/10 text-primary px-sm py-[2px] rounded-pill">
+                  Total Aggregate: {progress}%
+                </span>
               </div>
 
-              <div className="space-y-xxs">
-                <label className="font-semibold text-caption-strong">Completion Progress (%)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="5"
-                  disabled={!canEditTask}
-                  value={progress}
-                  onChange={(e) => handleProgressChange(Number(e.target.value))}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none font-mono"
-                />
+              <div className="space-y-sm">
+                {subAssignments.map((sub, sIdx) => {
+                  const isMySub = sub.assignedTo === myUserId;
+                  const canEditThisSub = canEditAdminFields || isMySub || (role === 'LEAD' && sub.teamId === myTeamId);
+
+                  return (
+                    <div 
+                      key={sIdx}
+                      className={`p-sm rounded-lg border transition-all ${
+                        isMySub 
+                          ? 'bg-primary/5 border-primary/40 shadow-xs' 
+                          : 'bg-canvas border-hairline'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-xs">
+                        <div className="flex items-center gap-xs">
+                          <span className="font-bold text-[12px] text-ink">{sub.teamName || sub.teamId}</span>
+                          <span className="text-[11px] text-ink-muted80">👤 {sub.assigneeName || 'Unassigned'}</span>
+                          {isMySub && (
+                            <span className="bg-primary text-white text-[9px] font-bold px-xs py-[1px] rounded-pill">
+                              Your Part
+                            </span>
+                          )}
+                        </div>
+
+                        <select
+                          disabled={!canEditThisSub}
+                          value={sub.status || 'NOT_STARTED'}
+                          onChange={(e) => handleSubStatusChange(sIdx, e.target.value)}
+                          className="bg-canvas border border-hairline rounded px-xs py-[3px] text-[11px] font-semibold text-ink focus:outline-none disabled:opacity-60"
+                        >
+                          <option value="NOT_STARTED">Not Started</option>
+                          <option value="IN_PROGRESS">In Progress</option>
+                          <option value="VERIFY">Under Verification</option>
+                          <option value="BLOCKED">Blocked</option>
+                          <option value="COMPLETED">Completed</option>
+                        </select>
+                      </div>
+
+                      {/* Slider Control */}
+                      <div className="space-y-[4px]">
+                        <div className="flex items-center justify-between text-[11px] font-mono">
+                          <span className="text-ink-muted48">Progress:</span>
+                          <span className="font-bold text-ink">{sub.progress || 0}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          disabled={!canEditThisSub}
+                          value={sub.progress || 0}
+                          onChange={(e) => handleSubProgressChange(sIdx, Number(e.target.value))}
+                          className="w-full accent-primary h-2 bg-ink-muted8 rounded-lg cursor-pointer disabled:opacity-50"
+                        />
+                      </div>
+
+                      {canEditThisSub && (
+                        <div className="pt-xs mt-xs border-t border-hairline/60">
+                          <input
+                            type="text"
+                            placeholder="Operator note / link for this department..."
+                            value={sub.remarks || ''}
+                            onChange={(e) => handleSubRemarksChange(sIdx, e.target.value)}
+                            className="w-full bg-canvas/60 border border-hairline rounded px-xs py-[4px] text-[11px] focus:outline-none focus:border-primary"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
+          )}
 
-            {/* When status is Under Verification, display Verifier Selection */}
-            {status === 'VERIFY' && (
-              <div className="space-y-xxs bg-purple-50/50 p-xs rounded-md border border-purple-200">
-                <label className="font-semibold text-caption-strong text-purple-900">Assigned Verifier (Approver)</label>
-                <select
-                  disabled={!canEditAdminFields}
-                  value={verifier}
-                  onChange={(e) => setVerifier(e.target.value)}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
-                >
-                  <option value="">Default (Task Assigner / Lead)</option>
-                  {users.map(u => (
-                    <option key={u.userId} value={u.userId}>
-                      {u.name} ({u.role}{u.position ? ` - ${u.position}` : ''})
-                    </option>
-                  ))}
-                </select>
+          {/* Section 1: Standard Progress updates (if not multi-department or executive override) */}
+          {subAssignments.length === 0 && (
+            <div className="bg-canvas-parchment/30 border border-hairline rounded-md p-md space-y-sm">
+              <h4 className="text-[11px] font-bold text-primary uppercase tracking-wider">Operator Update</h4>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
+                <div className="space-y-xxs">
+                  <label className="font-semibold text-caption-strong">Workflow Status</label>
+                  <select
+                    disabled={!canEditTask}
+                    value={status}
+                    onChange={(e) => handleStatusChange(e.target.value)}
+                    className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
+                  >
+                    <option value="NOT_STARTED">Not Started</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="VERIFY">Under Verification</option>
+                    <option value="DELAYED">Delayed</option>
+                    <option value="BLOCKED">Blocked</option>
+                    <option value="COMPLETED">Completed</option>
+                  </select>
+                </div>
+
+                <div className="space-y-xxs">
+                  <label className="font-semibold text-caption-strong">Completion Progress (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="5"
+                    disabled={!canEditTask}
+                    value={progress}
+                    onChange={(e) => handleProgressChange(Number(e.target.value))}
+                    className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none font-mono"
+                  />
+                </div>
               </div>
-            )}
-
-            <div className="space-y-xxs">
-              <label className="font-semibold text-caption-strong">Operator Activity Remarks *</label>
-              <input
-                type="text"
-                required={canEditTask}
-                disabled={!canEditTask}
-                placeholder={canEditTask ? "Remarks are required to commit status changes..." : "No remarks."}
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
-              />
             </div>
+          )}
+
+          {/* Activity Remarks */}
+          <div className="space-y-xxs">
+            <label className="font-semibold text-caption-strong">Activity Remarks</label>
+            <input
+              type="text"
+              disabled={!canEditTask}
+              placeholder="e.g. Updated content drafts & design layout..."
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
+            />
           </div>
 
           {/* Section 2: Administrative Details */}
-          <div className="space-y-sm">
+          <div className="space-y-sm pt-xs border-t border-hairline">
             <h4 className="text-[11px] font-bold text-ink-muted48 uppercase tracking-wider">Task Parameters</h4>
 
             <div className="space-y-xxs">
@@ -1341,43 +1578,32 @@ const EditTaskModal: React.FC<EditModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
               <div className="space-y-xxs">
-                <label className="font-semibold text-caption-strong">Assign Team</label>
-                <select
+                <label className="font-semibold text-caption-strong">Task Deadline</label>
+                <input
+                  type="date"
                   disabled={!canEditAdminFields}
-                  value={team}
-                  onChange={(e) => {
-                    setTeam(e.target.value);
-                    setAssignee('');
-                  }}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
-                >
-                  <option value="">Unassigned</option>
-                  {teams.map(t => (
-                    <option key={t.teamId} value={t.teamId}>{t.teamName}</option>
-                  ))}
-                </select>
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[6px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none font-mono"
+                />
               </div>
 
               <div className="space-y-xxs">
-                <label className="font-semibold text-caption-strong">Assign Operator (Owner)</label>
+                <label className="font-semibold text-caption-strong">Priority</label>
                 <select
                   disabled={!canEditAdminFields}
-                  value={assignee}
-                  onChange={(e) => setAssignee(e.target.value)}
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
                   className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
                 >
-                  <option value="">Unassigned</option>
-                  {users
-                    .filter(u => !team || u.teamId === team)
-                    .map(u => (
-                      <option key={u.userId} value={u.userId}>{u.name}</option>
-                    ))
-                  }
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                  <option value="CRITICAL">Critical</option>
                 </select>
               </div>
             </div>
 
-            {/* Verifier Selector in Parameters */}
             <div className="space-y-xxs">
               <label className="font-semibold text-caption-strong">Assigned Verifier (Approver)</label>
               <select
@@ -1395,108 +1621,63 @@ const EditTaskModal: React.FC<EditModalProps> = ({
               </select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
-              <div className="space-y-xxs">
-                <label className="font-semibold text-caption-strong">Priority</label>
-                <select
-                  disabled={!canEditAdminFields}
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
-                >
-                  <option value="LOW">Low</option>
-                  <option value="MEDIUM">Medium</option>
-                  <option value="HIGH">High</option>
-                  <option value="CRITICAL">Critical</option>
-                </select>
-              </div>
-
-              <div className="space-y-xxs">
-                <label className="font-semibold text-caption-strong">Task Deadline</label>
-                <input
-                  type="date"
-                  disabled={!canEditAdminFields}
-                  value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[6px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
-              <div className="space-y-xxs">
-                <label className="font-semibold text-caption-strong">Target Event</label>
-                <select
-                  disabled={!canEditAdminFields}
-                  value={eventVal}
-                  onChange={(e) => setEventVal(e.target.value)}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
-                >
-                  <option value="">None</option>
-                  {events.map(ev => (
-                    <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-xxs">
-                <label className="font-semibold text-caption-strong">Drive Link</label>
+            <div className="space-y-xxs">
+              <label className="font-semibold text-caption-strong">Google Drive Asset URL</label>
+              <div className="flex items-center gap-xs">
                 <input
                   type="url"
-                  disabled={!canEditAdminFields}
+                  disabled={!canEditTask}
                   placeholder="https://drive.google.com/..."
                   value={drive}
                   onChange={(e) => setDrive(e.target.value)}
-                  className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
+                  className="flex-1 bg-canvas border border-hairline rounded-md px-sm py-[8px] text-ink disabled:bg-ink-muted4 disabled:text-ink-muted48 focus:border-primary focus:outline-none"
                 />
+                {drive && (
+                  <a 
+                    href={drive} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="p-[8px] bg-ink-muted8 hover:bg-ink-muted16 rounded-md text-primary transition shrink-0"
+                    title="Open Google Drive folder"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-sm pt-xs border-t border-hairline">
-            <div>
-              {canDeleteTask && (
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    if (window.confirm(`Are you sure you want to permanently delete task "${task.taskTitle}" (${task.taskId})?`)) {
-                      onDeleteTask(task.taskId);
-                    }
-                  }}
-                  className="px-sm py-[7px] text-[12px] font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition flex items-center gap-xxs"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete Task
-                </button>
-              )}
-            </div>
+          <div className="flex items-center justify-between gap-sm pt-sm border-t border-hairline">
+            {canDeleteTask ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Are you sure you want to delete this task?")) {
+                    onDeleteTask(task.taskId);
+                  }
+                }}
+                className="p-xs text-red-500 hover:bg-red-50 rounded-md transition flex items-center gap-xxs text-[12px]"
+              >
+                <Trash2 className="w-4 h-4" /> Delete Task
+              </button>
+            ) : <div></div>}
 
             <div className="flex items-center gap-sm">
-              {canEditTask ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="apple-btn-secondary py-[8px] px-md select-none active:scale-[0.98] transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="apple-btn-primary py-[8px] px-lg select-none active:scale-[0.98] transition"
-                  >
-                    Commit Changes
-                  </button>
-                </>
-              ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="apple-btn-secondary py-[8px] px-md"
+              >
+                Cancel
+              </button>
+              {canEditTask && (
                 <button
-                  type="button"
-                  onClick={onClose}
-                  className="apple-btn-secondary py-[8px] px-lg select-none active:scale-[0.98] transition font-medium"
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="apple-btn-primary py-[8px] px-lg"
                 >
-                  Close
+                  {isSubmitting ? 'Saving...' : 'Save Updates'}
                 </button>
               )}
             </div>
