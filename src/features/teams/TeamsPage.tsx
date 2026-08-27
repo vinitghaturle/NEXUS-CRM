@@ -50,15 +50,40 @@ export const TeamsPage: React.FC = () => {
     queryFn: () => callApi('teams.list'),
   });
 
-  const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
+  const { data: rawTasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ['tasks'],
     queryFn: () => callApi('tasks.list'),
+  });
+
+  const { data: rawEvents = [] } = useQuery<any[]>({
+    queryKey: ['events'],
+    queryFn: () => callApi('events.list'),
   });
 
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => callApi('users.list'),
   });
+
+  const activeEventsMap = React.useMemo(() => {
+    const map = new Set<string>();
+    rawEvents.forEach(e => {
+      if (String(e.eventStatus || '').toUpperCase() !== 'CANCELLED') {
+        map.add(e.eventId);
+      }
+    });
+    return map;
+  }, [rawEvents]);
+
+  const tasks = React.useMemo(() => {
+    return rawTasks.filter(t => {
+      if (String(t.status || '').toUpperCase() === 'CANCELLED') return false;
+      if (t.hasOwnProperty('eventId') && (t as any).eventId && rawEvents.length > 0 && !activeEventsMap.has((t as any).eventId)) {
+        return false;
+      }
+      return true;
+    });
+  }, [rawTasks, rawEvents, activeEventsMap]);
 
   if (teamsLoading || tasksLoading || usersLoading) {
     return <Loading message="Aggregating team workloads & task metrics..." />;
@@ -81,7 +106,7 @@ export const TeamsPage: React.FC = () => {
   const teamCards = teams.map(team => {
     const teamTasks = tasks.filter(t => {
       if (!t.teamId) return false;
-      if (t.status === 'CANCELLED') return false;
+      if (String(t.status || '').toUpperCase() === 'CANCELLED') return false;
       return t.teamId.trim().toUpperCase() === team.teamId.trim().toUpperCase();
     });
 

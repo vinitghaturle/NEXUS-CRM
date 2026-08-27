@@ -73,6 +73,7 @@ interface User {
 interface EventItem {
   eventId: string;
   eventName: string;
+  eventStatus?: string;
 }
 
 export function parseDepartmentAssignments(raw?: string | DepartmentAssignment[]): DepartmentAssignment[] {
@@ -138,7 +139,7 @@ export const TaskBoardPage: React.FC = () => {
   };
 
   // Fetch lists
-  const { data: tasks = [], isLoading: tasksLoading, error: tasksError, refetch: refetchTasks } = useQuery<Task[]>({
+  const { data: rawTasks = [], isLoading: tasksLoading, error: tasksError, refetch: refetchTasks } = useQuery<Task[]>({
     queryKey: ['tasks'],
     queryFn: () => callApi('tasks.list'),
   });
@@ -153,10 +154,30 @@ export const TaskBoardPage: React.FC = () => {
     queryFn: () => callApi('users.list'),
   });
 
-  const { data: events = [] } = useQuery<EventItem[]>({
+  const { data: rawEvents = [] } = useQuery<EventItem[]>({
     queryKey: ['events'],
     queryFn: () => callApi('events.list'),
   });
+
+  const events = React.useMemo(() => {
+    return rawEvents.filter(e => String(e.eventStatus || '').toUpperCase() !== 'CANCELLED');
+  }, [rawEvents]);
+
+  const activeEventsMap = React.useMemo(() => {
+    const map = new Set<string>();
+    events.forEach(e => map.add(e.eventId));
+    return map;
+  }, [events]);
+
+  const tasks = React.useMemo(() => {
+    return rawTasks.filter(t => {
+      if (String(t.status || '').toUpperCase() === 'CANCELLED') return false;
+      if (t.eventId && rawEvents.length > 0 && !activeEventsMap.has(t.eventId)) {
+        return false;
+      }
+      return true;
+    });
+  }, [rawTasks, rawEvents, activeEventsMap]);
 
   // Direct URL Task Link Handler (?taskId=TSK-XXXX)
   useEffect(() => {
