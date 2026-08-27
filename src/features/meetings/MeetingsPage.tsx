@@ -17,9 +17,7 @@ import {
   Edit3, 
   FileCheck,
   Video,
-  X,
-  Copy,
-  Check
+  X
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -53,19 +51,6 @@ function toDisplayTime(timeInputValue?: string): string {
     return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
   }
   return timeInputValue;
-}
-
-// Helper to generate a realistic Google Meet URL
-function generateGoogleMeetLink(): string {
-  var chars = 'abcdefghijklmnopqrstuvwxyz';
-  var seg = function(len: number) {
-    var str = '';
-    for (var i = 0; i < len; i++) {
-      str += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return str;
-  };
-  return `https://meet.google.com/${seg(3)}-${seg(4)}-${seg(3)}`;
 }
 
 interface Meeting {
@@ -530,19 +515,10 @@ const ScheduleMeetingModal: React.FC<ScheduleModalProps> = ({ users, teams, onSu
   const [startTime, setStartTime] = useState('10:00 AM');
   const [endTime, setEndTime] = useState('11:00 AM');
   const [isOnline, setIsOnline] = useState(true);
-  const [location, setLocation] = useState(() => generateGoogleMeetLink());
+  const [location, setLocation] = useState('');
   const [agenda, setAgenda] = useState('');
   const [momAssigneeId, setMomAssigneeId] = useState('');
   const [targetTeamIds, setTargetTeamIds] = useState('ALL');
-  const [copiedLink, setCopiedLink] = useState(false);
-
-  const handleCopyLink = () => {
-    if (location) {
-      navigator.clipboard.writeText(location).catch(() => {});
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    }
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -656,32 +632,22 @@ const ScheduleMeetingModal: React.FC<ScheduleModalProps> = ({ users, teams, onSu
 
           {/* Online vs Offline Meeting Format Toggle */}
           <div className="space-y-xxs">
-            <label className="font-semibold text-caption-strong">Meeting Mode</label>
+            <label className="font-semibold text-caption-strong">Meeting Format</label>
             <div className="grid grid-cols-2 gap-xs bg-canvas-parchment/60 p-[3px] rounded-lg border border-hairline">
               <button
                 type="button"
-                onClick={() => {
-                  setIsOnline(true);
-                  if (!location || !location.startsWith('http')) {
-                    setLocation(generateGoogleMeetLink());
-                  }
-                }}
+                onClick={() => setIsOnline(true)}
                 className={`flex items-center justify-center gap-xs py-[7px] text-[12px] font-semibold rounded-md transition-all ${
                   isOnline 
                     ? 'bg-canvas text-primary shadow-xs border border-hairline' 
                     : 'text-ink-muted48 hover:text-ink'
                 }`}
               >
-                <Video className="w-3.5 h-3.5" /> 🌐 Online (Google Meet)
+                <Video className="w-3.5 h-3.5" /> 🌐 Online (Meet / Link)
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setIsOnline(false);
-                  if (location && location.includes('meet.google.com')) {
-                    setLocation('');
-                  }
-                }}
+                onClick={() => setIsOnline(false)}
                 className={`flex items-center justify-center gap-xs py-[7px] text-[12px] font-semibold rounded-md transition-all ${
                   !isOnline 
                     ? 'bg-canvas text-primary shadow-xs border border-hairline' 
@@ -693,37 +659,28 @@ const ScheduleMeetingModal: React.FC<ScheduleModalProps> = ({ users, teams, onSu
             </div>
           </div>
 
-          {/* Location / Google Meet URL field */}
+          {/* Location / Meeting URL field */}
           <div className="space-y-xxs">
             <div className="flex items-center justify-between">
               <label className="font-semibold text-caption-strong">
-                {isOnline ? 'Google Meet Video Link *' : 'Venue / Room Location *'}
+                {isOnline ? 'Meeting Link (Google Meet / Zoom)' : 'Venue / Room Location *'}
               </label>
               {isOnline && (
-                <div className="flex items-center gap-sm">
-                  <button
-                    type="button"
-                    onClick={handleCopyLink}
-                    className="text-[11px] text-ink-muted80 hover:text-ink flex items-center gap-[2px]"
-                  >
-                    {copiedLink ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedLink ? 'Copied!' : 'Copy'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLocation(generateGoogleMeetLink())}
-                    className="text-[11px] text-primary hover:underline font-normal"
-                  >
-                    Generate New Link
-                  </button>
-                </div>
+                <a
+                  href="https://meet.google.com/new"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-primary hover:underline flex items-center gap-[2px]"
+                >
+                  <span>Start New Meet</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               )}
             </div>
             <div className="relative">
               <input
                 type={isOnline ? 'url' : 'text'}
-                required={!isOnline}
-                placeholder={isOnline ? 'https://meet.google.com/xxx-yyyy-zzz' : 'e.g. Main Auditorium / Lab 301'}
+                placeholder={isOnline ? 'e.g. https://meet.google.com/abc-defg-hij' : 'e.g. Main Auditorium / Lab 301'}
                 value={location}
                 onChange={e => setLocation(e.target.value)}
                 className="w-full bg-canvas border border-hairline rounded-md pl-sm pr-[36px] py-[8px] focus:outline-none focus:border-primary font-mono text-[12px]"
@@ -1059,32 +1016,22 @@ const EditMeetingModal: React.FC<EditMeetingModalProps> = ({ meeting, users, onS
 
           {/* Online vs Offline Toggle */}
           <div className="space-y-xxs">
-            <label className="font-semibold text-caption-strong">Meeting Mode</label>
+            <label className="font-semibold text-caption-strong">Meeting Format</label>
             <div className="grid grid-cols-2 gap-xs bg-canvas-parchment/60 p-[3px] rounded-lg border border-hairline">
               <button
                 type="button"
-                onClick={() => {
-                  setIsOnline(true);
-                  if (!location || !location.startsWith('http')) {
-                    setLocation(generateGoogleMeetLink());
-                  }
-                }}
+                onClick={() => setIsOnline(true)}
                 className={`flex items-center justify-center gap-xs py-[7px] text-[12px] font-semibold rounded-md transition-all ${
                   isOnline 
                     ? 'bg-canvas text-primary shadow-xs border border-hairline' 
                     : 'text-ink-muted48 hover:text-ink'
                 }`}
               >
-                <Video className="w-3.5 h-3.5" /> 🌐 Online (Google Meet)
+                <Video className="w-3.5 h-3.5" /> 🌐 Online (Meet / Link)
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setIsOnline(false);
-                  if (location && location.includes('meet.google.com')) {
-                    setLocation('');
-                  }
-                }}
+                onClick={() => setIsOnline(false)}
                 className={`flex items-center justify-center gap-xs py-[7px] text-[12px] font-semibold rounded-md transition-all ${
                   !isOnline 
                     ? 'bg-canvas text-primary shadow-xs border border-hairline' 
@@ -1096,26 +1043,28 @@ const EditMeetingModal: React.FC<EditMeetingModalProps> = ({ meeting, users, onS
             </div>
           </div>
 
-          {/* Location / Google Meet URL field */}
+          {/* Location / Meeting URL field */}
           <div className="space-y-xxs">
             <div className="flex items-center justify-between">
               <label className="font-semibold text-caption-strong">
-                {isOnline ? 'Google Meet URL' : 'Location / Room'}
+                {isOnline ? 'Meeting Link (Google Meet / Zoom)' : 'Venue / Room Location'}
               </label>
               {isOnline && (
-                <button
-                  type="button"
-                  onClick={() => setLocation(generateGoogleMeetLink())}
-                  className="text-[11px] text-primary hover:underline font-normal"
+                <a
+                  href="https://meet.google.com/new"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-primary hover:underline flex items-center gap-[2px]"
                 >
-                  Generate New Link
-                </button>
+                  <span>Start New Meet</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               )}
             </div>
             <div className="relative">
               <input
                 type={isOnline ? 'url' : 'text'}
-                placeholder={isOnline ? 'https://meet.google.com/xxx-yyyy-zzz' : 'e.g. Auditorium 2'}
+                placeholder={isOnline ? 'e.g. https://meet.google.com/abc-defg-hij' : 'e.g. Auditorium 2'}
                 value={location}
                 onChange={e => setLocation(e.target.value)}
                 className="w-full bg-canvas border border-hairline rounded-md pl-sm pr-[36px] py-[8px] focus:outline-none font-mono text-[12px]"

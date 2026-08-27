@@ -24,14 +24,16 @@ function canUserPerform(user, action, resourceContext) {
 
   // Auto-resolve resource attributes if IDs are provided without metadata
   if (resourceContext) {
-    if (resourceContext.taskId && (!resourceContext.assignedBy || !resourceContext.assignedTo)) {
+    if (resourceContext.taskId) {
       try {
         var tRepo = new SheetRepository("04_Tasks", "TSK", "taskId");
         var tRecord = tRepo.getById(resourceContext.taskId);
         if (tRecord) {
-          resourceContext.assignedBy = tRecord.assignedBy;
-          resourceContext.assignedTo = tRecord.assignedTo;
-          resourceContext.teamId = tRecord.teamId;
+          if (!resourceContext.assignedBy) resourceContext.assignedBy = tRecord.assignedBy;
+          if (!resourceContext.assignedTo) resourceContext.assignedTo = tRecord.assignedTo;
+          if (!resourceContext.teamId) resourceContext.teamId = tRecord.teamId;
+          if (!resourceContext.verifierId) resourceContext.verifierId = tRecord.verifierId;
+          if (!resourceContext.departmentAssignments) resourceContext.departmentAssignments = tRecord.departmentAssignments;
         }
       } catch (e) {}
     }
@@ -125,12 +127,33 @@ function canUserPerform(user, action, resourceContext) {
     case "tasks.updateStatus":
     case "tasks.updateProgress":
     case "tasks.submitForVerification":
-      // A Lead can only update tasks in their own department
+      // A Lead can update tasks in their own department
       if (role === "LEAD" && resourceContext && resourceContext.teamId === teamId) return true;
-      // The task creator (assignedBy) or assigned operator (assignedTo) can update
+      
       if (resourceContext) {
+        // The task creator (assignedBy) can update
         if (resourceContext.assignedBy === userId) return true;
-        if (resourceContext.assignedTo === userId) return true;
+        
+        // Single or comma-separated assignedTo matches userId
+        if (resourceContext.assignedTo) {
+          var assignees = String(resourceContext.assignedTo).split(",").map(function(s) { return s.trim(); });
+          if (assignees.indexOf(userId) !== -1) return true;
+        }
+        
+        // Check if user is an assigned operator in departmentAssignments (multi-user tasks)
+        if (resourceContext.departmentAssignments) {
+          try {
+            var depts = typeof resourceContext.departmentAssignments === "string" 
+              ? JSON.parse(resourceContext.departmentAssignments) 
+              : resourceContext.departmentAssignments;
+            if (Array.isArray(depts)) {
+              for (var d = 0; d < depts.length; d++) {
+                if (depts[d].assignedTo === userId) return true;
+                if (role === "LEAD" && depts[d].teamId === teamId) return true;
+              }
+            }
+          } catch (e) {}
+        }
       }
       return false;
 
@@ -145,6 +168,18 @@ function canUserPerform(user, action, resourceContext) {
       if (role === "LEAD" && resourceContext && resourceContext.teamId === teamId) return true;
       if (resourceContext) {
         if (resourceContext.verifierId === userId || resourceContext.assignedBy === userId) return true;
+        if (resourceContext.departmentAssignments) {
+          try {
+            var vDepts = typeof resourceContext.departmentAssignments === "string" 
+              ? JSON.parse(resourceContext.departmentAssignments) 
+              : resourceContext.departmentAssignments;
+            if (Array.isArray(vDepts)) {
+              for (var vd = 0; vd < vDepts.length; vd++) {
+                if (role === "LEAD" && vDepts[vd].teamId === teamId) return true;
+              }
+            }
+          } catch (e) {}
+        }
       }
       return false;
 
