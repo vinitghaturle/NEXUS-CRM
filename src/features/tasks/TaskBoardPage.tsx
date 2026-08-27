@@ -343,6 +343,8 @@ export const TaskBoardPage: React.FC = () => {
 
   // Filtering
   const filteredTasks = tasks.filter(task => {
+    if (task.status === 'CANCELLED') return false;
+
     const subs = parseDepartmentAssignments(task.departmentAssignments);
     const inSubTeams = subs.some(s => s.teamId === filterTeam);
     const inSubAssignees = subs.some(s => s.assignedTo === filterAssignee);
@@ -396,8 +398,8 @@ export const TaskBoardPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-md">
         <div className="space-y-xxs">
           <div className="flex items-center gap-xs">
-            <span className="text-primary font-semibold text-caption-strong uppercase">Workflow Kanban</span>
-            <span className="bg-primary/10 text-primary text-[11px] font-semibold px-xs py-[2px] rounded-pill">Multi-Team Sync</span>
+            <span className="text-primary font-semibold text-caption-strong uppercase">Workflow </span>
+            <span className="bg-primary/10 text-primary text-[11px] font-semibold px-xs py-[2px] rounded-pill"></span>
           </div>
           <h1 className="text-display-md font-bold text-ink tracking-tight">Task Board</h1>
           <p className="text-caption-spec text-ink-muted48">

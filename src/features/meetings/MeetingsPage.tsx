@@ -161,7 +161,7 @@ export const MeetingsPage: React.FC = () => {
         <div className="space-y-xxs">
           <div className="flex items-center gap-xs">
             <span className="text-primary font-semibold text-caption-strong uppercase tracking-wider">Operations & Governance</span>
-            <span className="bg-primary/10 text-primary text-[11px] font-semibold px-xs py-[2px] rounded-pill">V1 Live</span>
+            <span className="bg-primary/10 text-primary text-[11px] font-semibold px-xs py-[2px] rounded-pill"></span>
           </div>
           <h1 className="text-display-md font-bold text-ink tracking-tight">Meetings & Schedule</h1>
           <p className="text-caption-spec text-ink-muted48 max-w-[620px]">

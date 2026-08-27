@@ -81,6 +81,7 @@ export const TeamsPage: React.FC = () => {
   const teamCards = teams.map(team => {
     const teamTasks = tasks.filter(t => {
       if (!t.teamId) return false;
+      if (t.status === 'CANCELLED') return false;
       return t.teamId.trim().toUpperCase() === team.teamId.trim().toUpperCase();
     });
 
@@ -90,7 +91,7 @@ export const TeamsPage: React.FC = () => {
     });
 
     const completed = teamTasks.filter(t => t.status === 'COMPLETED').length;
-    const activeTasks = teamTasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
+    const activeTasks = teamTasks.filter(t => t.status !== 'COMPLETED');
     const overdueTasks = activeTasks.filter(t => {
       if (!t.deadline) return false;
       const d = new Date(t.deadline);

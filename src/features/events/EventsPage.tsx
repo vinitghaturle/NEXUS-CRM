@@ -86,15 +86,18 @@ export const EventsPage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   // Queries
-  const { data: events = [], isLoading: eventsLoading, error: eventsError, refetch: refetchEvents } = useQuery<EventItem[]>({
+  const { data: rawEvents = [], isLoading: eventsLoading, error: eventsError, refetch: refetchEvents } = useQuery<EventItem[]>({
     queryKey: ['events'],
     queryFn: () => callApi('events.list'),
   });
 
-  const { data: tasks = [] } = useQuery<Task[]>({
+  const { data: rawTasks = [] } = useQuery<Task[]>({
     queryKey: ['tasks'],
     queryFn: () => callApi('tasks.list'),
   });
+
+  const events = rawEvents.filter(e => String(e.eventStatus || '').toUpperCase() !== 'CANCELLED');
+  const tasks = rawTasks.filter(t => String(t.status || '').toUpperCase() !== 'CANCELLED');
 
   const { data: teams = [] } = useQuery<Team[]>({
     queryKey: ['teams'],
