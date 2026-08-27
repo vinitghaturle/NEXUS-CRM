@@ -207,11 +207,53 @@ function handleUpdateTask(taskId, taskData, operatorUserId) {
       updateFields.departmentAssignments = JSON.stringify(currentDeptAssignments);
     }
   } else if (taskData.hasOwnProperty("departmentAssignments")) {
+    var newAssignments = [];
     if (typeof taskData.departmentAssignments === "string") {
-      updateFields.departmentAssignments = taskData.departmentAssignments;
-      try { currentDeptAssignments = JSON.parse(taskData.departmentAssignments); } catch (e) {}
+      try { newAssignments = JSON.parse(taskData.departmentAssignments); } catch (e) {}
     } else if (Array.isArray(taskData.departmentAssignments)) {
-      currentDeptAssignments = taskData.departmentAssignments;
+      newAssignments = taskData.departmentAssignments;
+    }
+
+    if (newAssignments.length > 0 && currentDeptAssignments.length > 0) {
+      // Check user role and team
+      var userRole = "";
+      var userTeam = "";
+      try {
+        var uRepo = new SheetRepository("02_Users", "USR", "userId");
+        var uRec = uRepo.getById(operatorUserId);
+        if (uRec) {
+          userRole = String(uRec.role || "").toUpperCase();
+          userTeam = uRec.teamId || "";
+        }
+      } catch (e) {}
+
+      var isExec = userRole === "ADMIN" || userRole === "PRESIDENT" || userRole === "VP";
+
+      // Only apply sub-assignment changes that the operator is authorized to edit
+      for (var d = 0; d < currentDeptAssignments.length; d++) {
+        var existingSub = currentDeptAssignments[d];
+        var incomingSub = null;
+        for (var n = 0; n < newAssignments.length; n++) {
+          if ((newAssignments[n].teamId && newAssignments[n].teamId === existingSub.teamId) ||
+              (newAssignments[n].assignedTo && newAssignments[n].assignedTo === existingSub.assignedTo)) {
+            incomingSub = newAssignments[n];
+            break;
+          }
+        }
+
+        if (incomingSub) {
+          var canEditThisSub = isExec || (userRole === "LEAD" && existingSub.teamId === userTeam) || (existingSub.assignedTo === operatorUserId);
+          if (canEditThisSub) {
+            if (incomingSub.progress !== undefined) existingSub.progress = Number(incomingSub.progress);
+            if (incomingSub.status) existingSub.status = incomingSub.status;
+            if (incomingSub.remarks !== undefined) existingSub.remarks = incomingSub.remarks;
+            existingSub.lastUpdated = new Date().toISOString();
+          }
+        }
+      }
+      updateFields.departmentAssignments = JSON.stringify(currentDeptAssignments);
+    } else {
+      currentDeptAssignments = newAssignments;
       updateFields.departmentAssignments = JSON.stringify(currentDeptAssignments);
     }
   }

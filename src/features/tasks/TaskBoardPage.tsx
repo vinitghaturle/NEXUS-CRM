@@ -1449,7 +1449,8 @@ const EditTaskModal: React.FC<EditModalProps> = ({
               <div className="space-y-sm">
                 {subAssignments.map((sub, sIdx) => {
                   const isMySub = sub.assignedTo === myUserId;
-                  const canEditThisSub = canEditAdminFields || isMySub || (role === 'LEAD' && sub.teamId === myTeamId);
+                  const isExecutive = role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN';
+                  const canEditThisSub = isExecutive || (role === 'LEAD' && sub.teamId === myTeamId) || isMySub;
 
                   return (
                     <div 
