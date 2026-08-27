@@ -1,12 +1,27 @@
 // TasksHandler.gs — Core handlers for Tasks management (04_Tasks sheet).
 
 /**
- * Returns all active (non-cancelled) tasks.
+ * Returns all active (non-cancelled) tasks, excluding tasks belonging to cancelled/deleted events.
  * @returns {Array<Object>} List of active tasks
  */
 function handleListTasks() {
-  var repo = new SheetRepository("04_Tasks", "TSK", "taskId");
-  return repo.getAll();
+  var tasksRepo = new SheetRepository("04_Tasks", "TSK", "taskId");
+  var eventsRepo = new SheetRepository("03_Events", "EVT", "eventId");
+
+  var activeEvents = eventsRepo.getAll();
+  var activeEventMap = {};
+  for (var e = 0; e < activeEvents.length; e++) {
+    activeEventMap[activeEvents[e].eventId] = true;
+  }
+
+  var allTasks = tasksRepo.getAll();
+  return allTasks.filter(function(task) {
+    if (task.eventId && !activeEventMap[task.eventId]) {
+      // Event was cancelled or deleted, exclude this task
+      return false;
+    }
+    return true;
+  });
 }
 
 /**
@@ -27,7 +42,7 @@ function handleGetTask(taskId) {
 }
 
 /**
- * Creates a new task. Enforces that new tasks start as NOT_STARTED / 0%.
+ * Creates a new task. Supports multi-department assignment and individual sub-progress tracking.
  * @param {Object} taskData - Task parameter payload
  * @param {string} creatorUserId - User ID of the creator
  * @returns {Object} The newly created task record
@@ -39,20 +54,62 @@ function handleCreateTask(taskData, creatorUserId) {
 
   var tasksRepo = new SheetRepository("04_Tasks", "TSK", "taskId");
 
+  // Format department assignments
+  var deptAssignments = [];
+  if (taskData.departmentAssignments) {
+    if (typeof taskData.departmentAssignments === "string") {
+      try {
+        deptAssignments = JSON.parse(taskData.departmentAssignments);
+      } catch (e) {
+        deptAssignments = [];
+      }
+    } else if (Array.isArray(taskData.departmentAssignments)) {
+      deptAssignments = taskData.departmentAssignments;
+    }
+  }
+
+  // Ensure default sub-assignment values
+  if (deptAssignments.length > 0) {
+    deptAssignments = deptAssignments.map(function(item) {
+      return {
+        teamId: item.teamId || "",
+        teamName: item.teamName || "",
+        assignedTo: item.assignedTo || "",
+        assigneeName: item.assigneeName || "",
+        status: item.status || "NOT_STARTED",
+        progress: Number(item.progress) || 0,
+        remarks: item.remarks || "",
+        lastUpdated: new Date().toISOString()
+      };
+    });
+  }
+
+  // Resolve primary team and assignee from sub-assignments if omitted
+  var primaryTeam = taskData.teamId || (deptAssignments.length > 0 ? deptAssignments[0].teamId : "");
+  var primaryAssignee = taskData.assignedTo || (deptAssignments.length > 0 ? deptAssignments[0].assignedTo : "");
+
+  // Calculate initial aggregate progress
+  var initialPercent = 0;
+  if (deptAssignments.length > 0) {
+    var totalSubProgress = deptAssignments.reduce(function(acc, curr) { return acc + (Number(curr.progress) || 0); }, 0);
+    initialPercent = Math.round(totalSubProgress / deptAssignments.length);
+  }
+
   var newTask = {
     eventId: taskData.eventId || "",
     projectId: taskData.projectId || "",
     taskTitle: taskData.taskTitle,
     taskDescription: taskData.taskDescription || "",
-    teamId: taskData.teamId || "",
-    assignedTo: taskData.assignedTo || "",
+    teamId: primaryTeam,
+    assignedTo: primaryAssignee,
     assignedBy: creatorUserId || "",
     verifierId: taskData.verifierId || creatorUserId || "",
     priority: taskData.priority || "MEDIUM",
     startDate: taskData.startDate ? new Date(taskData.startDate) : new Date(),
     deadline: taskData.deadline ? new Date(taskData.deadline) : "",
-    status: "NOT_STARTED", // Enforce initial status rules
-    completionPercent: 0,   // Enforce initial progress rules
+    status: initialPercent === 100 ? "COMPLETED" : (initialPercent > 0 ? "IN_PROGRESS" : "NOT_STARTED"),
+    completionPercent: initialPercent,
+    departmentAssignments: deptAssignments.length > 0 ? JSON.stringify(deptAssignments) : "",
     remarks: taskData.remarks || "",
     rejectionRemarks: "",
     completionDate: "",
@@ -63,8 +120,18 @@ function handleCreateTask(taskData, creatorUserId) {
 
   var insertedTask = tasksRepo.insert(newTask);
   
-  // Send email notification to assignee
-  if (insertedTask.assignedTo) {
+  // Send email notifications to all assigned operators across departments
+  if (deptAssignments.length > 0) {
+    for (var i = 0; i < deptAssignments.length; i++) {
+      var sub = deptAssignments[i];
+      if (sub.assignedTo) {
+        sendNotification("TASK_ASSIGNED", insertedTask, sub.assignedTo, {
+          teamName: sub.teamName || "",
+          operatorName: sub.assigneeName || ""
+        });
+      }
+    }
+  } else if (insertedTask.assignedTo) {
     sendNotification("TASK_ASSIGNED", insertedTask, insertedTask.assignedTo);
   }
   
@@ -76,14 +143,14 @@ function handleCreateTask(taskData, creatorUserId) {
     "NOT_STARTED",
     "",
     0,
-    taskData.remarks || "Task created."
+    taskData.remarks || "Task created with multi-department assignments."
   );
 
   return insertedTask;
 }
 
 /**
- * Updates a task. Enforces status consistency, history updates, and audit logging.
+ * Updates a task. Handles individual department sub-progress updates and overall aggregation.
  * @param {string} taskId - Unique ID of the task to update
  * @param {Object} taskData - Fields to update
  * @param {string} operatorUserId - User ID of the updating operator
@@ -110,24 +177,86 @@ function handleUpdateTask(taskId, taskData, operatorUserId) {
   if (taskData.hasOwnProperty("remarks")) updateFields.remarks = taskData.remarks;
   if (taskData.hasOwnProperty("rejectionRemarks")) updateFields.rejectionRemarks = taskData.rejectionRemarks;
 
-  // 1. Enforce Status and Progress consistency rules
+  // Multi-department sub-assignment handling
+  var currentDeptAssignments = [];
+  if (existingTask.departmentAssignments) {
+    try {
+      currentDeptAssignments = JSON.parse(existingTask.departmentAssignments);
+    } catch (e) {
+      currentDeptAssignments = [];
+    }
+  }
+
+  // Check if an individual operator is updating their specific department's sub-progress
+  if (taskData.updateSubAssignment) {
+    var subUpdate = taskData.updateSubAssignment; // { teamId, progress, status, remarks }
+    var matched = false;
+    for (var d = 0; d < currentDeptAssignments.length; d++) {
+      if ((subUpdate.teamId && currentDeptAssignments[d].teamId === subUpdate.teamId) ||
+          (subUpdate.assignedTo && currentDeptAssignments[d].assignedTo === subUpdate.assignedTo) ||
+          (currentDeptAssignments[d].assignedTo === operatorUserId)) {
+        if (subUpdate.progress !== undefined) currentDeptAssignments[d].progress = Number(subUpdate.progress);
+        if (subUpdate.status) currentDeptAssignments[d].status = subUpdate.status;
+        if (subUpdate.remarks) currentDeptAssignments[d].remarks = subUpdate.remarks;
+        currentDeptAssignments[d].lastUpdated = new Date().toISOString();
+        matched = true;
+        break;
+      }
+    }
+    if (matched) {
+      updateFields.departmentAssignments = JSON.stringify(currentDeptAssignments);
+    }
+  } else if (taskData.hasOwnProperty("departmentAssignments")) {
+    if (typeof taskData.departmentAssignments === "string") {
+      updateFields.departmentAssignments = taskData.departmentAssignments;
+      try { currentDeptAssignments = JSON.parse(taskData.departmentAssignments); } catch (e) {}
+    } else if (Array.isArray(taskData.departmentAssignments)) {
+      currentDeptAssignments = taskData.departmentAssignments;
+      updateFields.departmentAssignments = JSON.stringify(currentDeptAssignments);
+    }
+  }
+
+  // Calculate aggregate progress and status from sub-assignments if present
   var targetStatus = taskData.status ? taskData.status.toUpperCase() : existingTask.status;
   var targetPercent = taskData.completionPercent !== undefined ? Number(taskData.completionPercent) : Number(existingTask.completionPercent);
 
-  // Status mapping adjustments
-  if (taskData.hasOwnProperty("status") && !taskData.hasOwnProperty("completionPercent")) {
-    if (targetStatus === "COMPLETED" || targetStatus === "VERIFY") {
+  if (currentDeptAssignments.length > 0) {
+    var totalSub = currentDeptAssignments.reduce(function(acc, curr) { return acc + (Number(curr.progress) || 0); }, 0);
+    targetPercent = Math.round(totalSub / currentDeptAssignments.length);
+
+    var allCompleted = currentDeptAssignments.every(function(s) { return s.status === "COMPLETED" || s.progress === 100; });
+    var anyVerify = currentDeptAssignments.some(function(s) { return s.status === "VERIFY"; });
+    var anyBlocked = currentDeptAssignments.some(function(s) { return s.status === "BLOCKED"; });
+    var allNotStarted = currentDeptAssignments.every(function(s) { return s.progress === 0 && (s.status === "NOT_STARTED" || !s.status); });
+
+    if (allCompleted) {
+      targetStatus = "COMPLETED";
       targetPercent = 100;
-    } else if (targetStatus === "NOT_STARTED") {
-      targetPercent = 0;
+    } else if (anyVerify) {
+      targetStatus = "VERIFY";
+    } else if (anyBlocked) {
+      targetStatus = "BLOCKED";
+    } else if (allNotStarted) {
+      targetStatus = "NOT_STARTED";
+    } else {
+      targetStatus = "IN_PROGRESS";
     }
-  } else if (!taskData.hasOwnProperty("status") && taskData.hasOwnProperty("completionPercent")) {
-    if (targetPercent === 100) {
-      if (existingTask.status !== "VERIFY" && existingTask.status !== "COMPLETED") {
-        targetStatus = "COMPLETED";
+  } else {
+    // Standard single-assignee status consistency
+    if (taskData.hasOwnProperty("status") && !taskData.hasOwnProperty("completionPercent")) {
+      if (targetStatus === "COMPLETED" || targetStatus === "VERIFY") {
+        targetPercent = 100;
+      } else if (targetStatus === "NOT_STARTED") {
+        targetPercent = 0;
       }
-    } else if (existingTask.status === "COMPLETED" && targetPercent < 100) {
-      targetStatus = targetPercent === 0 ? "NOT_STARTED" : "IN_PROGRESS";
+    } else if (!taskData.hasOwnProperty("status") && taskData.hasOwnProperty("completionPercent")) {
+      if (targetPercent === 100) {
+        if (existingTask.status !== "VERIFY" && existingTask.status !== "COMPLETED") {
+          targetStatus = "COMPLETED";
+        }
+      } else if (existingTask.status === "COMPLETED" && targetPercent < 100) {
+        targetStatus = targetPercent === 0 ? "NOT_STARTED" : "IN_PROGRESS";
+      }
     }
   }
 
@@ -141,7 +270,7 @@ function handleUpdateTask(taskId, taskData, operatorUserId) {
     updateFields.completionDate = "";
   }
 
-  // 2. Deadline Changes (Enforce security logs)
+  // Manage deadline changes
   if (taskData.hasOwnProperty("deadline")) {
     var newDeadline = taskData.deadline ? new Date(taskData.deadline) : "";
     var oldDeadlineStr = existingTask.deadline ? String(new Date(existingTask.deadline)) : "";
@@ -161,7 +290,7 @@ function handleUpdateTask(taskId, taskData, operatorUserId) {
     }
   }
 
-  // 3. Task Reassignment (Enforce security logs & notification)
+  // Manage Task Reassignment
   var isReassigned = false;
   if (taskData.hasOwnProperty("assignedTo") && taskData.assignedTo !== existingTask.assignedTo) {
     updateFields.assignedTo = taskData.assignedTo;
@@ -177,7 +306,7 @@ function handleUpdateTask(taskId, taskData, operatorUserId) {
     );
   }
 
-  // 4. Task History Updates Log
+  // Task History Updates Log
   var statusChanged = targetStatus !== existingTask.status;
   var percentChanged = targetPercent !== Number(existingTask.completionPercent);
   
@@ -189,20 +318,20 @@ function handleUpdateTask(taskId, taskData, operatorUserId) {
       targetStatus,
       existingTask.completionPercent,
       targetPercent,
-      taskData.remarks || "Task details updated."
+      taskData.remarks || "Task progress updated across departments."
     );
   }
 
   // Perform sheet update
   var updated = tasksRepo.update(taskId, updateFields);
 
-  // 5. Trigger notifications based on detected state transitions
+  // Trigger notifications
   if (isReassigned && updated.assignedTo) {
     sendNotification("TASK_REASSIGNED", updated, updated.assignedTo);
   } else if (statusChanged) {
     if (targetStatus === "BLOCKED") {
       sendNotification("TASK_BLOCKED", updated, updated.assignedBy || updated.verifierId, {
-        blockReason: taskData.remarks || "Marked as blocked by team member."
+        blockReason: taskData.remarks || "Marked as blocked by department team member."
       });
     } else if (targetStatus === "VERIFY") {
       sendNotification("TASK_READY_FOR_VERIFICATION", updated, updated.verifierId || updated.assignedBy, {
@@ -222,10 +351,6 @@ function handleUpdateTask(taskId, taskData, operatorUserId) {
 
 /**
  * Task owner submits task for verification by leadership.
- * @param {string} taskId
- * @param {string} verifierId - Optional user ID of the chosen verifier
- * @param {string} remarks - Note from the submitter
- * @param {string} operatorUserId - Submitting user
  */
 function handleTaskSubmitForVerification(taskId, verifierId, remarks, operatorUserId) {
   if (!taskId) throw new Error("Missing task ID.");
@@ -248,9 +373,6 @@ function handleTaskSubmitForVerification(taskId, verifierId, remarks, operatorUs
 
 /**
  * Verifier approves and verifies the task (marks as COMPLETED / VERIFIED).
- * @param {string} taskId
- * @param {string} remarks - Approval remarks
- * @param {string} operatorUserId - Approving verifier
  */
 function handleTaskVerify(taskId, remarks, operatorUserId) {
   if (!taskId) throw new Error("Missing task ID.");
@@ -283,9 +405,6 @@ function handleTaskVerify(taskId, remarks, operatorUserId) {
 
 /**
  * Verifier rejects the task and requests changes.
- * @param {string} taskId
- * @param {string} remarks - Mandatory feedback / rejection reason
- * @param {string} operatorUserId - Rejecting verifier
  */
 function handleTaskReject(taskId, remarks, operatorUserId) {
   if (!taskId) throw new Error("Missing task ID.");
@@ -324,7 +443,7 @@ function handleUpdateTaskStatus(taskId, status, remarks, operatorUserId) {
   if (!status) {
     throw new Error("Status is required.");
   }
-  var stat = status.toUpperCase();
+  var stat = String(status || '').toUpperCase();
   var proposedPercent = undefined;
   if (stat === "COMPLETED" || stat === "VERIFY") proposedPercent = 100;
   if (stat === "NOT_STARTED") proposedPercent = 0;
@@ -360,8 +479,6 @@ function handleUpdateTaskProgress(taskId, completionPercent, remarks, operatorUs
 
 /**
  * Calculates the target user's workload indicators.
- * @param {string} targetUserId - Unique ID of the target user
- * @returns {Object} Workload information
  */
 function handleGetUserWorkload(targetUserId) {
   if (!targetUserId) {
@@ -373,8 +490,7 @@ function handleGetUserWorkload(targetUserId) {
   
   var activeCount = 0;
   for (var i = 0; i < userTasks.length; i++) {
-    var status = userTasks[i].status ? userTasks[i].status.toUpperCase() : "";
-    // Active tasks = NOT_STARTED, IN_PROGRESS, DELAYED, BLOCKED, VERIFY, REJECTED
+    var status = String(userTasks[i].status || '').toUpperCase();
     if (["NOT_STARTED", "IN_PROGRESS", "DELAYED", "BLOCKED", "VERIFY", "REJECTED"].indexOf(status) !== -1) {
       activeCount++;
     }
@@ -402,8 +518,6 @@ function handleGetUserWorkload(targetUserId) {
 
 /**
  * Deletes / cancels a task.
- * @param {string} taskId
- * @param {string} operatorUserId
  */
 function handleDeleteTask(taskId, operatorUserId) {
   if (!taskId) throw new Error("Missing task ID.");

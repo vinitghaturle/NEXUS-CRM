@@ -46,15 +46,18 @@ function handleCreateEvent(eventData, creatorUserId) {
   
   var newEvent = {
     eventName: eventData.eventName,
+    eventCategory: eventData.eventCategory || "WORKSHOP",
     eventDescription: eventData.eventDescription || "",
     eventDate: eventDateObj,
     venue: eventData.venue || "",
+    leadTeamId: eventData.leadTeamId || "",
     budgetAllocation: Number(eventData.budgetAllocation) || 0,
     eventStatus: "PLANNING",
     driveFolderId: eventData.driveFolderId || "",
     remarks: eventData.remarks || "",
     isTemplateDriven: String(eventData.isTemplateDriven).toUpperCase() === "TRUE" ? "TRUE" : "FALSE",
-    sourceTemplateId: eventData.sourceTemplateId || ""
+    sourceTemplateId: eventData.sourceTemplateId || "",
+    createdBy: creatorUserId || ""
   };
 
   var insertedEvent = eventsRepo.insert(newEvent);
@@ -192,18 +195,19 @@ function handleDeleteEvent(eventId, operatorUserId) {
  * @param {string} eventId - Unique ID of the cancelled event
  */
 function cascadeEventCancellation(eventId) {
-  Logger.log("Cascading cancellation to tasks for Event: " + eventId);
+  Logger.log("Cascading cancellation to all tasks for Event: " + eventId);
   var tasksRepo = new SheetRepository("04_Tasks", "TSK", "taskId");
-  var eventTasks = tasksRepo.find({ eventId: eventId });
+  var rawTasks = tasksRepo._getData().rows;
   
   var cancelledCount = 0;
-  for (var i = 0; i < eventTasks.length; i++) {
-    var task = eventTasks[i];
-    // Check if task is active and not already completed or cancelled
-    var status = task.status ? task.status.toUpperCase() : "";
-    if (status !== "COMPLETED" && status !== "CANCELLED") {
-      tasksRepo.update(task.taskId, { status: "CANCELLED" });
-      cancelledCount++;
+  for (var i = 0; i < rawTasks.length; i++) {
+    var task = rawTasks[i];
+    if (task.eventId === eventId) {
+      var status = String(task.status || '').toUpperCase();
+      if (status !== "CANCELLED") {
+        tasksRepo.update(task.taskId, { status: "CANCELLED" });
+        cancelledCount++;
+      }
     }
   }
   Logger.log("Cascaded cancellation to " + cancelledCount + " tasks.");

@@ -14,7 +14,7 @@ function handleGetExecutiveDashboard() {
   var activeEvents = eventsRepo.getAll().length;
 
   // 2. Task metrics
-  var allTasks = tasksRepo.getAll();
+  var allTasks = handleListTasks();
   var totalTasksCount = allTasks.length;
   
   var completedTasksCount = 0;
@@ -23,7 +23,7 @@ function handleGetExecutiveDashboard() {
   todayStart.setHours(0,0,0,0);
 
   for (var i = 0; i < allTasks.length; i++) {
-    var status = allTasks[i].status ? allTasks[i].status.toUpperCase() : "";
+    var status = String(allTasks[i].status || '').toUpperCase();
     if (status === "COMPLETED") {
       completedTasksCount++;
     } else if (status !== "CANCELLED") {
@@ -44,7 +44,7 @@ function handleGetExecutiveDashboard() {
   var totalEstimatedBudget = 0;
   var totalActualExpense = 0;
   for (var j = 0; j < allBudgets.length; j++) {
-    var approvalStatus = allBudgets[j].approvalStatus ? allBudgets[j].approvalStatus.toUpperCase() : "";
+    var approvalStatus = String(allBudgets[j].approvalStatus || '').toUpperCase();
     if (approvalStatus === "APPROVED") {
       totalEstimatedBudget += Number(allBudgets[j].estimatedBudget) || 0;
       totalActualExpense += Number(allBudgets[j].actualExpense) || 0;
@@ -88,11 +88,13 @@ function handleGetTeamDashboard(teamId) {
     throw new Error("Team not found with ID: " + teamId);
   }
 
-  var tasksRepo = new SheetRepository("04_Tasks", "TSK", "taskId");
   var usersRepo = new SheetRepository("01_Users", "USR", "userId");
 
-  // 1. Team Tasks metrics
-  var teamTasks = tasksRepo.find({ teamId: teamId });
+  // 1. Team Tasks metrics (from active non-cancelled list)
+  var allActiveTasks = handleListTasks();
+  var teamTasks = allActiveTasks.filter(function(t) {
+    return String(t.teamId || '').trim().toUpperCase() === String(teamId).trim().toUpperCase();
+  });
   var totalTasksCount = teamTasks.length;
   
   var completedTasksCount = 0;
@@ -101,7 +103,7 @@ function handleGetTeamDashboard(teamId) {
   todayStart.setHours(0,0,0,0);
 
   for (var i = 0; i < teamTasks.length; i++) {
-    var status = teamTasks[i].status ? teamTasks[i].status.toUpperCase() : "";
+    var status = String(teamTasks[i].status || '').toUpperCase();
     if (status === "COMPLETED") {
       completedTasksCount++;
     } else if (status !== "CANCELLED") {
@@ -159,8 +161,10 @@ function handleGetMemberDashboard(userId) {
     throw new Error("Missing user ID.");
   }
 
-  var tasksRepo = new SheetRepository("04_Tasks", "TSK", "taskId");
-  var memberTasks = tasksRepo.find({ assignedTo: userId });
+  var allActiveTasks = handleListTasks();
+  var memberTasks = allActiveTasks.filter(function(t) {
+    return String(t.assignedTo || '').trim().toUpperCase() === String(userId).trim().toUpperCase();
+  });
   var totalTasksCount = memberTasks.length;
 
   var completedTasksCount = 0;
@@ -176,7 +180,7 @@ function handleGetMemberDashboard(userId) {
   };
 
   for (var i = 0; i < memberTasks.length; i++) {
-    var status = memberTasks[i].status ? memberTasks[i].status.toUpperCase() : "";
+    var status = String(memberTasks[i].status || '').toUpperCase();
     if (status === "COMPLETED") {
       completedTasksCount++;
     } else if (status !== "CANCELLED") {
@@ -223,7 +227,7 @@ function runMorningJob() {
   var delayedCount = 0;
   for (var i = 0; i < rawTasks.length; i++) {
     var task = rawTasks[i];
-    var status = task.status ? task.status.toUpperCase() : "";
+    var status = String(task.status || '').toUpperCase();
     if (status !== "COMPLETED" && status !== "CANCELLED") {
       if (task.deadline) {
         var deadlineDate = new Date(task.deadline);

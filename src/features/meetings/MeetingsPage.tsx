@@ -17,9 +17,56 @@ import {
   Edit3, 
   FileCheck,
   Video,
-  X
+  X,
+  Copy,
+  Check
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+
+// Helper to convert display time (e.g. "10:00 AM" or "02:30 PM") to input type="time" 24h string ("10:00" or "14:30")
+function toTimeInputValue(timeStr?: string): string {
+  if (!timeStr) return '';
+  var trimmed = String(timeStr).trim();
+  if (/^\d{2}:\d{2}$/.test(trimmed)) return trimmed;
+  var match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (match) {
+    var hours = parseInt(match[1], 10);
+    var minutes = match[2];
+    var modifier = match[3].toUpperCase();
+    if (modifier === 'PM' && hours < 12) hours += 12;
+    if (modifier === 'AM' && hours === 12) hours = 0;
+    return `${hours.toString().padStart(2, '0')}:${minutes}`;
+  }
+  return '';
+}
+
+// Helper to convert input type="time" ("14:30") to standard human-readable format ("02:30 PM")
+function toDisplayTime(timeInputValue?: string): string {
+  if (!timeInputValue) return '';
+  var match = String(timeInputValue).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (match) {
+    var hours = parseInt(match[1], 10);
+    var minutes = match[2];
+    var ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // hour 0 is 12
+    return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+  }
+  return timeInputValue;
+}
+
+// Helper to generate a realistic Google Meet URL
+function generateGoogleMeetLink(): string {
+  var chars = 'abcdefghijklmnopqrstuvwxyz';
+  var seg = function(len: number) {
+    var str = '';
+    for (var i = 0; i < len; i++) {
+      str += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return str;
+  };
+  return `https://meet.google.com/${seg(3)}-${seg(4)}-${seg(3)}`;
+}
 
 interface Meeting {
   meetingId: string;
@@ -482,10 +529,20 @@ const ScheduleMeetingModal: React.FC<ScheduleModalProps> = ({ users, teams, onSu
   const [meetingDate, setMeetingDate] = useState('');
   const [startTime, setStartTime] = useState('10:00 AM');
   const [endTime, setEndTime] = useState('11:00 AM');
-  const [location, setLocation] = useState('');
+  const [isOnline, setIsOnline] = useState(true);
+  const [location, setLocation] = useState(() => generateGoogleMeetLink());
   const [agenda, setAgenda] = useState('');
   const [momAssigneeId, setMomAssigneeId] = useState('');
   const [targetTeamIds, setTargetTeamIds] = useState('ALL');
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleCopyLink = () => {
+    if (location) {
+      navigator.clipboard.writeText(location).catch(() => {});
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -563,39 +620,120 @@ const ScheduleMeetingModal: React.FC<ScheduleModalProps> = ({ users, teams, onSu
             </div>
           </div>
 
+          {/* Time pickers (Start Time & End Time) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm">
             <div className="space-y-xxs">
-              <label className="font-semibold text-caption-strong">Start Time</label>
+              <label className="font-semibold text-caption-strong flex items-center justify-between">
+                <span className="flex items-center gap-xxs">
+                  <Clock className="w-3.5 h-3.5 text-primary" /> Start Time *
+                </span>
+                <span className="text-[10px] text-ink-muted48 font-mono">{startTime}</span>
+              </label>
               <input
-                type="text"
-                placeholder="e.g. 02:00 PM"
-                value={startTime}
-                onChange={e => setStartTime(e.target.value)}
-                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] focus:outline-none"
+                type="time"
+                required
+                value={toTimeInputValue(startTime) || '10:00'}
+                onChange={e => setStartTime(toDisplayTime(e.target.value))}
+                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[7px] focus:outline-none focus:border-primary font-mono text-[13px]"
               />
             </div>
 
             <div className="space-y-xxs">
-              <label className="font-semibold text-caption-strong">End Time</label>
+              <label className="font-semibold text-caption-strong flex items-center justify-between">
+                <span className="flex items-center gap-xxs">
+                  <Clock className="w-3.5 h-3.5 text-primary" /> End Time
+                </span>
+                <span className="text-[10px] text-ink-muted48 font-mono">{endTime}</span>
+              </label>
               <input
-                type="text"
-                placeholder="e.g. 03:30 PM"
-                value={endTime}
-                onChange={e => setEndTime(e.target.value)}
-                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] focus:outline-none"
+                type="time"
+                value={toTimeInputValue(endTime) || '11:00'}
+                onChange={e => setEndTime(toDisplayTime(e.target.value))}
+                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[7px] focus:outline-none focus:border-primary font-mono text-[13px]"
               />
             </div>
           </div>
 
+          {/* Online vs Offline Meeting Format Toggle */}
           <div className="space-y-xxs">
-            <label className="font-semibold text-caption-strong">Location / Virtual Meeting Link</label>
-            <input
-              type="text"
-              placeholder="e.g. Google Meet URL or Auditorium 3"
-              value={location}
-              onChange={e => setLocation(e.target.value)}
-              className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] focus:outline-none"
-            />
+            <label className="font-semibold text-caption-strong">Meeting Mode</label>
+            <div className="grid grid-cols-2 gap-xs bg-canvas-parchment/60 p-[3px] rounded-lg border border-hairline">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOnline(true);
+                  if (!location || !location.startsWith('http')) {
+                    setLocation(generateGoogleMeetLink());
+                  }
+                }}
+                className={`flex items-center justify-center gap-xs py-[7px] text-[12px] font-semibold rounded-md transition-all ${
+                  isOnline 
+                    ? 'bg-canvas text-primary shadow-xs border border-hairline' 
+                    : 'text-ink-muted48 hover:text-ink'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" /> 🌐 Online (Google Meet)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOnline(false);
+                  if (location && location.includes('meet.google.com')) {
+                    setLocation('');
+                  }
+                }}
+                className={`flex items-center justify-center gap-xs py-[7px] text-[12px] font-semibold rounded-md transition-all ${
+                  !isOnline 
+                    ? 'bg-canvas text-primary shadow-xs border border-hairline' 
+                    : 'text-ink-muted48 hover:text-ink'
+                }`}
+              >
+                <MapPin className="w-3.5 h-3.5" /> 🏢 Offline (In-Person)
+              </button>
+            </div>
+          </div>
+
+          {/* Location / Google Meet URL field */}
+          <div className="space-y-xxs">
+            <div className="flex items-center justify-between">
+              <label className="font-semibold text-caption-strong">
+                {isOnline ? 'Google Meet Video Link *' : 'Venue / Room Location *'}
+              </label>
+              {isOnline && (
+                <div className="flex items-center gap-sm">
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="text-[11px] text-ink-muted80 hover:text-ink flex items-center gap-[2px]"
+                  >
+                    {copiedLink ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedLink ? 'Copied!' : 'Copy'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLocation(generateGoogleMeetLink())}
+                    className="text-[11px] text-primary hover:underline font-normal"
+                  >
+                    Generate New Link
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <input
+                type={isOnline ? 'url' : 'text'}
+                required={!isOnline}
+                placeholder={isOnline ? 'https://meet.google.com/xxx-yyyy-zzz' : 'e.g. Main Auditorium / Lab 301'}
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                className="w-full bg-canvas border border-hairline rounded-md pl-sm pr-[36px] py-[8px] focus:outline-none focus:border-primary font-mono text-[12px]"
+              />
+              {isOnline ? (
+                <Video className="w-4 h-4 text-primary absolute right-sm top-1/2 -translate-y-1/2" />
+              ) : (
+                <MapPin className="w-4 h-4 text-ink-muted48 absolute right-sm top-1/2 -translate-y-1/2" />
+              )}
+            </div>
           </div>
 
           <div className="space-y-xxs">
@@ -809,7 +947,9 @@ const EditMeetingModal: React.FC<EditMeetingModalProps> = ({ meeting, users, onS
   const [title, setTitle] = useState(meeting.title || meeting.agenda);
   const [meetingType, setMeetingType] = useState(meeting.meetingType || 'GENERAL');
   const [meetingDate, setMeetingDate] = useState(meeting.meetingDate ? new Date(meeting.meetingDate).toISOString().split('T')[0] : '');
-  const [startTime, setStartTime] = useState(meeting.startTime || '');
+  const [startTime, setStartTime] = useState(meeting.startTime || '10:00 AM');
+  const [endTime, setEndTime] = useState(meeting.endTime || '11:00 AM');
+  const [isOnline, setIsOnline] = useState(() => (meeting.location || '').startsWith('http') || (meeting.location || '').includes('meet.google.com'));
   const [location, setLocation] = useState(meeting.location || '');
   const [agenda, setAgenda] = useState(meeting.agenda || '');
   const [momAssigneeId, setMomAssigneeId] = useState(meeting.momAssigneeId || meeting.responsiblePerson || '');
@@ -824,6 +964,7 @@ const EditMeetingModal: React.FC<EditMeetingModalProps> = ({ meeting, users, onS
       meetingType,
       meetingDate,
       startTime,
+      endTime,
       location,
       agenda,
       momAssigneeId,
@@ -883,25 +1024,107 @@ const EditMeetingModal: React.FC<EditMeetingModalProps> = ({ meeting, users, onS
             </div>
           </div>
 
+          {/* Time selectors (Start Time & End Time) */}
           <div className="grid grid-cols-2 gap-sm">
             <div className="space-y-xxs">
-              <label className="font-semibold text-caption-strong">Start Time</label>
+              <label className="font-semibold text-caption-strong flex items-center justify-between">
+                <span className="flex items-center gap-xxs">
+                  <Clock className="w-3.5 h-3.5 text-primary" /> Start Time
+                </span>
+                <span className="text-[10px] text-ink-muted48 font-mono">{startTime}</span>
+              </label>
               <input
-                type="text"
-                value={startTime}
-                onChange={e => setStartTime(e.target.value)}
-                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] focus:outline-none"
+                type="time"
+                value={toTimeInputValue(startTime) || '10:00'}
+                onChange={e => setStartTime(toDisplayTime(e.target.value))}
+                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[7px] focus:outline-none font-mono text-[13px]"
               />
             </div>
 
             <div className="space-y-xxs">
-              <label className="font-semibold text-caption-strong">Location / Meet Link</label>
+              <label className="font-semibold text-caption-strong flex items-center justify-between">
+                <span className="flex items-center gap-xxs">
+                  <Clock className="w-3.5 h-3.5 text-primary" /> End Time
+                </span>
+                <span className="text-[10px] text-ink-muted48 font-mono">{endTime}</span>
+              </label>
               <input
-                type="text"
+                type="time"
+                value={toTimeInputValue(endTime) || '11:00'}
+                onChange={e => setEndTime(toDisplayTime(e.target.value))}
+                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[7px] focus:outline-none font-mono text-[13px]"
+              />
+            </div>
+          </div>
+
+          {/* Online vs Offline Toggle */}
+          <div className="space-y-xxs">
+            <label className="font-semibold text-caption-strong">Meeting Mode</label>
+            <div className="grid grid-cols-2 gap-xs bg-canvas-parchment/60 p-[3px] rounded-lg border border-hairline">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOnline(true);
+                  if (!location || !location.startsWith('http')) {
+                    setLocation(generateGoogleMeetLink());
+                  }
+                }}
+                className={`flex items-center justify-center gap-xs py-[7px] text-[12px] font-semibold rounded-md transition-all ${
+                  isOnline 
+                    ? 'bg-canvas text-primary shadow-xs border border-hairline' 
+                    : 'text-ink-muted48 hover:text-ink'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" /> 🌐 Online (Google Meet)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOnline(false);
+                  if (location && location.includes('meet.google.com')) {
+                    setLocation('');
+                  }
+                }}
+                className={`flex items-center justify-center gap-xs py-[7px] text-[12px] font-semibold rounded-md transition-all ${
+                  !isOnline 
+                    ? 'bg-canvas text-primary shadow-xs border border-hairline' 
+                    : 'text-ink-muted48 hover:text-ink'
+                }`}
+              >
+                <MapPin className="w-3.5 h-3.5" /> 🏢 Offline (In-Person)
+              </button>
+            </div>
+          </div>
+
+          {/* Location / Google Meet URL field */}
+          <div className="space-y-xxs">
+            <div className="flex items-center justify-between">
+              <label className="font-semibold text-caption-strong">
+                {isOnline ? 'Google Meet URL' : 'Location / Room'}
+              </label>
+              {isOnline && (
+                <button
+                  type="button"
+                  onClick={() => setLocation(generateGoogleMeetLink())}
+                  className="text-[11px] text-primary hover:underline font-normal"
+                >
+                  Generate New Link
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <input
+                type={isOnline ? 'url' : 'text'}
+                placeholder={isOnline ? 'https://meet.google.com/xxx-yyyy-zzz' : 'e.g. Auditorium 2'}
                 value={location}
                 onChange={e => setLocation(e.target.value)}
-                className="w-full bg-canvas border border-hairline rounded-md px-sm py-[8px] focus:outline-none"
+                className="w-full bg-canvas border border-hairline rounded-md pl-sm pr-[36px] py-[8px] focus:outline-none font-mono text-[12px]"
               />
+              {isOnline ? (
+                <Video className="w-4 h-4 text-primary absolute right-sm top-1/2 -translate-y-1/2" />
+              ) : (
+                <MapPin className="w-4 h-4 text-ink-muted48 absolute right-sm top-1/2 -translate-y-1/2" />
+              )}
             </div>
           </div>
 

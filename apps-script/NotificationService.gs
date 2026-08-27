@@ -1,17 +1,17 @@
-// NotificationService.gs — Centralized transactional email & notification engine for NEXUS CRM.
-// Responsible for event detection, recipient resolution, templating, and failure-isolated dispatch.
+// NotificationService.gs — Centralized transactional email & notification engine for NEXUS CRM & Capacitor App.
+// Responsible for event detection, recipient resolution, templating, deep-linking CTA buttons, and failure-isolated dispatch.
 
 /**
- * Dispatches an automated email notification based on task lifecycle events.
+ * Dispatches an automated email notification based on task lifecycle or meeting events.
  * Safe side-effect: will never throw or interrupt the caller's main transaction.
  * 
- * @param {string} eventType - One of: TASK_ASSIGNED, TASK_REASSIGNED, TASK_READY_FOR_VERIFICATION, TASK_VERIFIED, TASK_REJECTED, TASK_BLOCKED
- * @param {Object} taskRecord - The updated/created task entity
+ * @param {string} eventType - One of: TASK_ASSIGNED, TASK_REASSIGNED, TASK_READY_FOR_VERIFICATION, TASK_VERIFIED, TASK_REJECTED, TASK_BLOCKED, MEETING_SCHEDULED, MEETING_REMINDER_1H, MOM_ASSIGNED
+ * @param {Object} entityRecord - The task or meeting entity
  * @param {string} recipientUserIdOrUid - The user ID or UID of the target recipient
- * @param {Object} [extraData] - Optional context: { rejectionRemark, blockReason, remarks, operatorName, ... }
+ * @param {Object} [extraData] - Optional context: { rejectionRemark, blockReason, remarks, operatorName, isMomAssignee, ... }
  */
-function sendNotification(eventType, taskRecord, recipientUserIdOrUid, extraData) {
-  if (!taskRecord || !eventType) return;
+function sendNotification(eventType, entityRecord, recipientUserIdOrUid, extraData) {
+  if (!entityRecord || !eventType) return;
   extraData = extraData || {};
 
   try {
@@ -20,8 +20,8 @@ function sendNotification(eventType, taskRecord, recipientUserIdOrUid, extraData
     if (!recipient || !recipient.email) {
       logNotificationEntry({
         eventType: eventType,
-        taskId: taskRecord.taskId || "",
-        eventId: taskRecord.eventId || "",
+        taskId: entityRecord.taskId || entityRecord.meetingId || "",
+        eventId: entityRecord.eventId || "",
         recipientUserId: recipientUserIdOrUid || "UNKNOWN",
         recipientEmail: recipient ? recipient.email : "MISSING",
         subject: "N/A",
@@ -32,15 +32,15 @@ function sendNotification(eventType, taskRecord, recipientUserIdOrUid, extraData
     }
 
     // 2. Resolve additional metadata (Event name, Team name, Assigner/Verifier name)
-    var contextData = resolveNotificationContext(taskRecord, extraData);
+    var contextData = resolveNotificationContext(entityRecord, extraData);
 
     // 3. Build Email Template (Subject, HTML, Plaintext)
-    var template = buildEmailTemplate(eventType, taskRecord, recipient, contextData, extraData);
+    var template = buildEmailTemplate(eventType, entityRecord, recipient, contextData, extraData);
     if (!template) {
       logNotificationEntry({
         eventType: eventType,
-        taskId: taskRecord.taskId || "",
-        eventId: taskRecord.eventId || "",
+        taskId: entityRecord.taskId || entityRecord.meetingId || "",
+        eventId: entityRecord.eventId || "",
         recipientUserId: recipient.userId,
         recipientEmail: recipient.email,
         subject: "N/A",
@@ -51,8 +51,9 @@ function sendNotification(eventType, taskRecord, recipientUserIdOrUid, extraData
     }
 
     // 4. Duplicate Protection: Check if identical notification was sent in the last 60 seconds
-    if (isDuplicateNotification(taskRecord.taskId, eventType, recipient.userId)) {
-      Logger.log("Duplicate notification suppressed: " + eventType + " for task " + taskRecord.taskId);
+    var entityId = entityRecord.taskId || entityRecord.meetingId || "GEN";
+    if (isDuplicateNotification(entityId, eventType, recipient.userId)) {
+      Logger.log("Duplicate notification suppressed: " + eventType + " for " + entityId);
       return;
     }
 
@@ -67,8 +68,8 @@ function sendNotification(eventType, taskRecord, recipientUserIdOrUid, extraData
     // 6. Log Successful Dispatch
     logNotificationEntry({
       eventType: eventType,
-      taskId: taskRecord.taskId || "",
-      eventId: taskRecord.eventId || "",
+      taskId: entityRecord.taskId || entityRecord.meetingId || "",
+      eventId: entityRecord.eventId || "",
       recipientUserId: recipient.userId,
       recipientEmail: recipient.email,
       subject: template.subject,
@@ -82,8 +83,8 @@ function sendNotification(eventType, taskRecord, recipientUserIdOrUid, extraData
     Logger.log("NotificationService error: " + err.toString());
     logNotificationEntry({
       eventType: eventType,
-      taskId: taskRecord.taskId || "",
-      eventId: taskRecord.eventId || "",
+      taskId: (entityRecord.taskId || entityRecord.meetingId || ""),
+      eventId: entityRecord.eventId || "",
       recipientUserId: recipientUserIdOrUid || "",
       recipientEmail: (recipient && recipient.email) ? recipient.email : "",
       subject: (template && template.subject) ? template.subject : "",
@@ -101,19 +102,16 @@ function resolveNotificationRecipient(userIdOrUid) {
   
   var usersRepo = new SheetRepository("01_Users", "USR", "userId");
   
-  // Try by userId first (e.g. USR-00001)
   if (userIdOrUid.indexOf("USR-") === 0) {
     var user = usersRepo.getById(userIdOrUid);
     if (user && user.email) return user;
   }
   
-  // Try by firebaseUid
   var matches = usersRepo.find({ firebaseUid: userIdOrUid });
   if (matches.length > 0 && matches[0].email) {
     return matches[0];
   }
   
-  // Try by direct email match if passed as email
   if (userIdOrUid.indexOf("@") !== -1) {
     var byEmail = usersRepo.find({ email: userIdOrUid });
     if (byEmail.length > 0) return byEmail[0];
@@ -126,17 +124,16 @@ function resolveNotificationRecipient(userIdOrUid) {
 /**
  * Resolves contextual Event Name, Team Name, and Assigner Name for templates.
  */
-function resolveNotificationContext(taskRecord, extraData) {
+function resolveNotificationContext(record, extraData) {
   var context = {
     eventName: "General Operations",
-    teamName: "Core Team",
-    assignedByName: "NEXUS Administrator",
+    teamName: extraData.teamName || "General Department",
+    assignedByName: extraData.operatorName || "NEXUS Administrator",
     verifierName: "Operations Lead",
-    ownerName: "Task Assignee",
+    ownerName: "Team Member",
     appUrl: "http://localhost:5173" // Default fallback URL
   };
 
-  // Resolve Portal URL from Settings if configured
   try {
     var settingsRepo = new SheetRepository("00_Settings", null, "settingKey");
     var appUrlSetting = settingsRepo.getById("PORTAL_BASE_URL");
@@ -145,51 +142,46 @@ function resolveNotificationContext(taskRecord, extraData) {
     }
   } catch (e) {}
 
-  // Resolve Event Name
-  if (taskRecord.eventId) {
+  if (record.eventId) {
     try {
       var eventsRepo = new SheetRepository("03_Events", "EVT", "eventId");
-      var eventObj = eventsRepo.getById(taskRecord.eventId);
+      var eventObj = eventsRepo.getById(record.eventId);
       if (eventObj && eventObj.eventName) {
         context.eventName = eventObj.eventName;
       }
     } catch (e) {}
   }
 
-  // Resolve Team Name
-  if (taskRecord.teamId) {
+  if (record.teamId) {
     try {
       var teamsRepo = new SheetRepository("02_Teams", "TEAM", "teamId");
-      var teamObj = teamsRepo.getById(taskRecord.teamId);
+      var teamObj = teamsRepo.getById(record.teamId);
       if (teamObj && teamObj.teamName) {
         context.teamName = teamObj.teamName;
       }
     } catch (e) {}
   }
 
-  // Resolve Assigner Name
-  if (taskRecord.assignedBy) {
-    var assigner = resolveNotificationRecipient(taskRecord.assignedBy);
+  if (record.assignedBy) {
+    var assigner = resolveNotificationRecipient(record.assignedBy);
     if (assigner && assigner.name) {
       context.assignedByName = assigner.name;
     }
   }
 
-  // Resolve Owner Name
-  if (taskRecord.assignedTo) {
-    var owner = resolveNotificationRecipient(taskRecord.assignedTo);
+  if (record.assignedTo) {
+    var owner = resolveNotificationRecipient(record.assignedTo);
     if (owner && owner.name) {
       context.ownerName = owner.name;
     }
   }
 
-  // Resolve Verifier Name (from extraData or task.verifierId / assignedBy)
   if (extraData.verifierName) {
     context.verifierName = extraData.verifierName;
-  } else if (taskRecord.verifierId) {
-    var verifier = resolveNotificationRecipient(taskRecord.verifierId);
+  } else if (record.verifierId) {
+    var verifier = resolveNotificationRecipient(record.verifierId);
     if (verifier && verifier.name) context.verifierName = verifier.name;
-  } else if (taskRecord.assignedBy) {
+  } else if (record.assignedBy) {
     context.verifierName = context.assignedByName;
   }
 
@@ -197,119 +189,175 @@ function resolveNotificationContext(taskRecord, extraData) {
 }
 
 /**
- * Builds email templates matching PRD §10 requirements with responsive Apple aesthetic.
+ * Builds clean, responsive Apple-inspired email templates with Capacitor App launch buttons.
+ * (No raw links; only deep-linking button actions).
  */
-function buildEmailTemplate(eventType, task, recipient, context, extraData) {
-  var taskTitle = task.taskTitle || "Untitled Task";
-  var taskUrl = context.appUrl + "/tasks?taskId=" + encodeURIComponent(task.taskId);
-  var deadlineFormatted = task.deadline ? new Date(task.deadline).toLocaleDateString("en-IN", { dateStyle: "long" }) : "Not Specified";
-  var priority = task.priority || "MEDIUM";
+function buildEmailTemplate(eventType, record, recipient, context, extraData) {
+  var isMeeting = eventType.indexOf("MEETING_") === 0 || eventType === "MOM_ASSIGNED";
+  var itemTitle = record.taskTitle || record.title || record.agenda || "Operations Notice";
+  
+  // App Action Deep Link
+  var targetUrl = "";
+  if (isMeeting) {
+    var mId = record.meetingId || record.taskId || "";
+    targetUrl = context.appUrl + "/meetings" + (mId ? "?meetingId=" + encodeURIComponent(mId) : "");
+  } else {
+    var tId = record.taskId || "";
+    targetUrl = context.appUrl + "/tasks" + (tId ? "?taskId=" + encodeURIComponent(tId) : "");
+  }
+
+  var deadlineFormatted = record.deadline ? new Date(record.deadline).toLocaleDateString("en-IN", { dateStyle: "long" }) : "Not Specified";
+  var meetingDateFormatted = record.meetingDate ? new Date(record.meetingDate).toLocaleDateString("en-IN", { dateStyle: "full" }) : "Upcoming";
+  var priority = record.priority || "MEDIUM";
 
   var subject = "";
   var heading = "";
   var messageContent = "";
-  var buttonText = "Open Task in NEXUS";
+  var buttonText = "Open in NEXUS App";
 
   switch (eventType) {
     case "TASK_ASSIGNED":
-      subject = "New Task Assigned — " + taskTitle;
-      heading = "New Task Assigned";
+      subject = "New Task Assigned — " + itemTitle;
+      heading = "New Task Assignment";
       messageContent = 
         "<p>Hi <strong>" + recipient.name + "</strong>,</p>" +
-        "<p>A new task has been assigned to you in NEXUS.</p>" +
+        "<p>A new task has been assigned to you in the NEXUS App.</p>" +
         renderMetadataTable([
-          { label: "Task", value: taskTitle },
-          { label: "Event", value: context.eventName },
-          { label: "Team", value: context.teamName },
+          { label: "Task", value: itemTitle },
+          { label: "Department", value: context.teamName },
           { label: "Assigned by", value: context.assignedByName },
           { label: "Deadline", value: deadlineFormatted },
           { label: "Priority", value: priority }
         ]);
+      buttonText = "Open Task in App";
       break;
 
     case "TASK_REASSIGNED":
-      subject = "Task Assigned to You — " + taskTitle;
+      subject = "Task Assigned to You — " + itemTitle;
       heading = "Task Reassigned";
       messageContent = 
         "<p>Hi <strong>" + recipient.name + "</strong>,</p>" +
-        "<p>A task has been reassigned to you in NEXUS.</p>" +
+        "<p>A task has been reassigned to you in the NEXUS App.</p>" +
         renderMetadataTable([
-          { label: "Task", value: taskTitle },
-          { label: "Event", value: context.eventName },
-          { label: "Team", value: context.teamName },
+          { label: "Task", value: itemTitle },
+          { label: "Department", value: context.teamName },
           { label: "Assigned by", value: context.assignedByName },
           { label: "Deadline", value: deadlineFormatted },
           { label: "Priority", value: priority }
         ]);
+      buttonText = "Open Task in App";
       break;
 
     case "TASK_READY_FOR_VERIFICATION":
-      subject = "Task Ready for Verification — " + taskTitle;
+      subject = "Task Ready for Verification — " + itemTitle;
       heading = "Task Submitted for Verification";
       messageContent = 
         "<p>Hi <strong>" + recipient.name + "</strong>,</p>" +
-        "<p><strong>" + context.ownerName + "</strong> has submitted a task for your verification.</p>" +
+        "<p><strong>" + context.ownerName + "</strong> has submitted their task progress for your review.</p>" +
         renderMetadataTable([
-          { label: "Task", value: taskTitle },
-          { label: "Event", value: context.eventName },
-          { label: "Team", value: context.teamName },
+          { label: "Task", value: itemTitle },
+          { label: "Department", value: context.teamName },
           { label: "Submitted by", value: context.ownerName },
           { label: "Deadline", value: deadlineFormatted }
         ]) +
         (extraData.remarks ? "<div style='margin-top:12px;padding:12px;background:#f5f5f7;border-left:3px solid #0066cc;border-radius:4px;'><strong>Operator Note:</strong> " + extraData.remarks + "</div>" : "");
-      buttonText = "Review Task & Verify";
+      buttonText = "Review & Verify in App";
       break;
 
     case "TASK_VERIFIED":
-      subject = "Task Verified — " + taskTitle;
+      subject = "Task Verified & Approved — " + itemTitle;
       heading = "Task Verified & Approved";
       messageContent = 
         "<p>Hi <strong>" + context.ownerName + "</strong>,</p>" +
-        "<p>Your task has been reviewed and verified by <strong>" + context.verifierName + "</strong>. The task is now marked as completed.</p>" +
+        "<p>Your task has been reviewed and verified by <strong>" + context.verifierName + "</strong>.</p>" +
         renderMetadataTable([
-          { label: "Task", value: taskTitle },
-          { label: "Event", value: context.eventName },
+          { label: "Task", value: itemTitle },
           { label: "Verified by", value: context.verifierName }
         ]);
+      buttonText = "View Completed Task";
       break;
 
     case "TASK_REJECTED":
-      subject = "Task Needs Changes — " + taskTitle;
+      subject = "Task Needs Changes — " + itemTitle;
       heading = "Changes Requested";
       messageContent = 
         "<p>Hi <strong>" + context.ownerName + "</strong>,</p>" +
-        "<p>Your task was reviewed by <strong>" + context.verifierName + "</strong> and requires changes before it can be verified.</p>" +
+        "<p>Your task was reviewed by <strong>" + context.verifierName + "</strong> and requires adjustments before approval.</p>" +
         renderMetadataTable([
-          { label: "Task", value: taskTitle },
-          { label: "Event", value: context.eventName },
+          { label: "Task", value: itemTitle },
           { label: "Reviewed by", value: context.verifierName }
         ]) +
-        (extraData.rejectionRemark ? "<div style='margin-top:14px;padding:14px;background:#fff5f5;border-left:3px solid #e02424;border-radius:6px;'><strong style='color:#c81e1e;'>Feedback / Reason for Changes:</strong><p style='margin:6px 0 0 0;color:#333;'>" + extraData.rejectionRemark + "</p></div>" : "") +
-        "<p style='margin-top:14px;color:#555;'>Please open NEXUS, review the feedback, update your work, and submit the task again for verification.</p>";
-      buttonText = "Open Task to Make Changes";
+        (extraData.rejectionRemark ? "<div style='margin-top:14px;padding:14px;background:#fff5f5;border-left:3px solid #e02424;border-radius:6px;'><strong style='color:#c81e1e;'>Feedback / Required Changes:</strong><p style='margin:6px 0 0 0;color:#333;'>" + extraData.rejectionRemark + "</p></div>" : "");
+      buttonText = "Open Task in App to Edit";
       break;
 
     case "TASK_BLOCKED":
-      subject = "Task Blocked — " + taskTitle;
-      heading = "Task Blocked Notice";
+      subject = "Task Blocked Alert — " + itemTitle;
+      heading = "Task Blocked Alert";
       messageContent = 
         "<p>Hi <strong>" + recipient.name + "</strong>,</p>" +
-        "<p>A task has been marked as <strong>BLOCKED</strong> in NEXUS.</p>" +
+        "<p>A task has encountered an operational blocker.</p>" +
         renderMetadataTable([
-          { label: "Task", value: taskTitle },
-          { label: "Event", value: context.eventName },
-          { label: "Owner", value: context.ownerName },
-          { label: "Blocked by", value: context.assignedByName }
+          { label: "Task", value: itemTitle },
+          { label: "Department", value: context.teamName },
+          { label: "Reported by", value: context.assignedByName }
         ]) +
         (extraData.blockReason ? "<div style='margin-top:14px;padding:14px;background:#fff8f1;border-left:3px solid #ff9800;border-radius:6px;'><strong style='color:#d97706;'>Blocker Details:</strong><p style='margin:6px 0 0 0;color:#333;'>" + extraData.blockReason + "</p></div>" : "");
       buttonText = "Inspect Blocked Task";
+      break;
+
+    case "MEETING_SCHEDULED":
+      subject = "Meeting Invitation: " + itemTitle;
+      heading = "Meeting Scheduled";
+      messageContent = 
+        "<p>Hi <strong>" + recipient.name + "</strong>,</p>" +
+        "<p>You are invited to an official NEXUS Operations Meeting.</p>" +
+        renderMetadataTable([
+          { label: "Topic", value: itemTitle },
+          { label: "Date", value: meetingDateFormatted },
+          { label: "Time", value: record.startTime || "TBD" },
+          { label: "Type", value: record.meetingType || "GENERAL" },
+          { label: "Venue / Link", value: record.location || "Online / NEXUS Room" },
+          { label: "MoM Writer", value: record.momAssigneeName || "Assigned Member" }
+        ]) +
+        (record.agenda ? "<div style='margin-top:14px;padding:12px;background:#f5f5f7;border-left:3px solid #0066cc;border-radius:6px;'><strong>Agenda:</strong><p style='margin:4px 0 0 0;color:#333;'>" + record.agenda + "</p></div>" : "");
+      buttonText = "Open Meeting in App";
+      break;
+
+    case "MEETING_REMINDER_1H":
+      subject = "1-Hour Reminder: " + itemTitle;
+      heading = "Meeting Starts in 1 Hour";
+      messageContent = 
+        "<p>Hi <strong>" + recipient.name + "</strong>,</p>" +
+        "<p>This is a quick reminder that your meeting begins in 1 hour.</p>" +
+        renderMetadataTable([
+          { label: "Topic", value: itemTitle },
+          { label: "Time", value: record.startTime || "In 1 Hour" },
+          { label: "Location", value: record.location || "NEXUS Room" }
+        ]);
+      buttonText = "Join / View Meeting in App";
+      break;
+
+    case "MOM_ASSIGNED":
+      subject = "Action Required: MoM Recording Assignment — " + itemTitle;
+      heading = "Assigned as Meeting MoM Recorder";
+      messageContent = 
+        "<p>Hi <strong>" + recipient.name + "</strong>,</p>" +
+        "<p>You have been assigned to record the <strong>Minutes of Meeting (MoM)</strong> for the upcoming meeting.</p>" +
+        renderMetadataTable([
+          { label: "Meeting", value: itemTitle },
+          { label: "Date & Time", value: meetingDateFormatted + " @ " + (record.startTime || "") },
+          { label: "Location", value: record.location || "NEXUS Room" }
+        ]) +
+        "<p style='margin-top:14px;color:#333;'>Please create a Google Doc during the meeting, record key discussions and resolutions, and submit the link in the NEXUS App after the meeting concludes.</p>";
+      buttonText = "Upload MoM Link in App";
       break;
 
     default:
       return null;
   }
 
-  // Generate responsive HTML template
+  // Generate responsive HTML template with prominent App Action button (no raw text links)
   var htmlBody = 
     "<!DOCTYPE html>" +
     "<html>" +
@@ -317,16 +365,17 @@ function buildEmailTemplate(eventType, task, recipient, context, extraData) {
     "<meta charset='utf-8'>" +
     "<meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
     "<style>" +
-    "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f7; margin: 0; padding: 24px; color: #1d1d1f; }" +
-    ".card { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e5e5ea; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }" +
-    ".header { background: #0066cc; padding: 20px 24px; color: #ffffff; }" +
-    ".header h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }" +
-    ".content { padding: 24px; font-size: 14px; line-height: 1.5; color: #1d1d1f; }" +
-    ".btn { display: inline-block; background-color: #0066cc; color: #ffffff !important; padding: 10px 22px; text-decoration: none; border-radius: 9999px; font-size: 13px; font-weight: 600; margin-top: 18px; text-align: center; }" +
-    ".footer { padding: 16px 24px; background: #fafafc; border-top: 1px solid #f0f0f2; text-align: center; font-size: 11px; color: #86868b; }" +
-    "table { width: 100%; border-collapse: collapse; margin-top: 12px; }" +
-    "td { padding: 6px 0; font-size: 13px; vertical-align: top; }" +
-    "td.lbl { width: 110px; color: #86868b; font-weight: 500; }" +
+    "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f7; margin: 0; padding: 24px 12px; color: #1d1d1f; -webkit-font-smoothing: antialiased; }" +
+    ".card { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 14px; border: 1px solid #e5e5ea; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.06); }" +
+    ".header { background: #0066cc; padding: 22px 24px; color: #ffffff; }" +
+    ".header h2 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }" +
+    ".content { padding: 24px; font-size: 14px; line-height: 1.55; color: #1d1d1f; }" +
+    ".btn-container { text-align: center; margin: 26px 0 10px 0; }" +
+    ".btn { display: inline-block; background-color: #0066cc; color: #ffffff !important; padding: 12px 28px; text-decoration: none; border-radius: 9999px; font-size: 14px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,102,204,0.3); }" +
+    ".footer { padding: 16px 24px; background: #fafafc; border-top: 1px solid #f0f0f2; text-align: center; font-size: 11.5px; color: #86868b; }" +
+    "table { width: 100%; border-collapse: collapse; margin-top: 14px; }" +
+    "td { padding: 6px 0; font-size: 13.5px; vertical-align: top; }" +
+    "td.lbl { width: 120px; color: #86868b; font-weight: 500; }" +
     "td.val { color: #1d1d1f; font-weight: 600; }" +
     "</style>" +
     "</head>" +
@@ -337,12 +386,12 @@ function buildEmailTemplate(eventType, task, recipient, context, extraData) {
     "</div>" +
     "<div class='content'>" +
     messageContent +
-    "<div style='text-align: center; margin-top: 20px;'>" +
-    "<a href='" + taskUrl + "' class='btn' target='_blank'>" + buttonText + "</a>" +
+    "<div class='btn-container'>" +
+    "<a href='" + targetUrl + "' class='btn' target='_blank'>" + buttonText + "</a>" +
     "</div>" +
     "</div>" +
     "<div class='footer'>" +
-    "NEXUS CRM & Operations System • Direct Link: <a href='" + taskUrl + "' style='color:#0066cc;text-decoration:none;'>" + task.taskId + "</a>" +
+    "NEXUS CRM & Operations System • Tap button above to open inside NEXUS App" +
     "</div>" +
     "</div>" +
     "</body>" +
@@ -351,13 +400,9 @@ function buildEmailTemplate(eventType, task, recipient, context, extraData) {
   // Plain text fallback
   var plainBody = 
     heading + "\n\n" +
-    "Task: " + taskTitle + "\n" +
-    "Event: " + context.eventName + "\n" +
-    "Team: " + context.teamName + "\n" +
-    "Deadline: " + deadlineFormatted + "\n" +
-    "Priority: " + priority + "\n\n" +
-    "Open task in NEXUS:\n" + taskUrl + "\n\n" +
-    "— NEXUS Core Operations";
+    "Topic / Task: " + itemTitle + "\n" +
+    "Details: Tap the notification in NEXUS App.\n\n" +
+    "— NEXUS Operations Core";
 
   return {
     subject: subject,
@@ -369,18 +414,18 @@ function buildEmailTemplate(eventType, task, recipient, context, extraData) {
 function renderMetadataTable(rows) {
   var html = "<table style='width:100%;margin:12px 0;'>";
   for (var i = 0; i < rows.length; i++) {
-    html += "<tr><td class='lbl' style='color:#777;width:110px;padding:4px 0;'>" + rows[i].label + ":</td><td class='val' style='color:#111;font-weight:600;padding:4px 0;'>" + rows[i].value + "</td></tr>";
+    html += "<tr><td class='lbl' style='color:#777;width:120px;padding:4px 0;'>" + rows[i].label + ":</td><td class='val' style='color:#111;font-weight:600;padding:4px 0;'>" + rows[i].value + "</td></tr>";
   }
   html += "</table>";
   return html;
 }
 
 /**
- * Checks for recent identical notification to prevent double-firing on network retries.
+ * Duplicate Protection Cache
  */
 var _notificationCache = {};
-function isDuplicateNotification(taskId, eventType, recipientUserId) {
-  var key = taskId + "|" + eventType + "|" + recipientUserId;
+function isDuplicateNotification(id, eventType, recipientUserId) {
+  var key = id + "|" + eventType + "|" + recipientUserId;
   var now = new Date().getTime();
   if (_notificationCache[key] && (now - _notificationCache[key]) < 60000) {
     return true;
@@ -427,25 +472,4 @@ function logNotificationEntry(entry) {
   } catch (err) {
     Logger.log("Failed to write to 22_Notifications sheet: " + err.toString());
   }
-}
-
-/**
- * Test utility function that can be executed directly inside Apps Script editor to send a sample test email.
- */
-function testSendNotificationEmail() {
-  var sampleTask = {
-    taskId: "TSK-TEST-001",
-    taskTitle: "Design IEEE Symposium Keynote Poster",
-    taskDescription: "Create a high-resolution banner and social promo assets for keynote speaker.",
-    priority: "HIGH",
-    deadline: new Date(new Date().getTime() + 3 * 24 * 60 * 60 * 1000),
-    teamId: "TEAM-001",
-    assignedTo: "vinit.ghaturle.ds@ghrce.raisoni.net"
-  };
-
-  sendNotification("TASK_ASSIGNED", sampleTask, "vinit.ghaturle.ds@ghrce.raisoni.net", {
-    remarks: "This is a direct test of the NEXUS CRM transactional email service."
-  });
-  
-  Logger.log("Test execution completed for: vinit.ghaturle.ds@ghrce.raisoni.net");
 }

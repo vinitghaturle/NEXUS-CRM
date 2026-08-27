@@ -1,5 +1,13 @@
-// Router.gs — Main HTTP POST entrypoint (doPost) for routing API calls.
+// Router.gs — Main HTTP entrypoints (doPost & doGet) for routing API calls.
 // All client requests go through this file, which parses actions and delegates execution.
+
+function doGet(e) {
+  return responseSuccess({
+    status: "online",
+    message: "NEXUS CRM Google Apps Script backend is live.",
+    timestamp: new Date().toISOString()
+  });
+}
 
 function doPost(e) {
   try {

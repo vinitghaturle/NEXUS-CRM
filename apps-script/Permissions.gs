@@ -70,13 +70,12 @@ function canUserPerform(user, action, resourceContext) {
       "achievements.list", "achievements.create", "achievements.update",
       "forms.list", "forms.create", "forms.update",
       "issues.list", "issues.create", "issues.update",
-      "meetings.list", "meetings.create", "meetings.update",
       "documents.list", "documents.create"
     ];
     if (adminOnlyActions.indexOf(action) !== -1) {
       return false;
     }
-    // All other operational actions (events, tasks, teams, users.list, users.get, dashboard): allow
+    // All other operational actions (events, tasks, teams, users.list, users.get, dashboard, meetings): allow
     return true;
   }
 
@@ -91,7 +90,7 @@ function canUserPerform(user, action, resourceContext) {
     case "dashboard.member":
       return role === "LEAD" || role === "MEMBER" || role === "GENERAL_MEMBER";
 
-    // All authenticated users can read tasks, users directory, teams, events, settings, workloads
+    // All authenticated users can read tasks, users directory, teams, events, settings, workloads, meetings
     case "tasks.list":
     case "tasks.get":
     case "users.list":
@@ -101,11 +100,22 @@ function canUserPerform(user, action, resourceContext) {
     case "teams.get":
     case "events.list":
     case "events.get":
+    case "meetings.list":
+    case "meetings.get":
     case "templates.list":
     case "templates.get":
     case "tasks.getUserWorkload":
     case "templates.previewTasks":
       return true;
+
+    case "meetings.create":
+      return role === "PRESIDENT" || role === "VP";
+
+    case "meetings.update":
+      if (role === "PRESIDENT" || role === "VP") return true;
+      // Allow designated MoM assignee to submit MoM link and notes
+      if (resourceContext && (resourceContext.momAssigneeId === userId || resourceContext.responsiblePerson === userId)) return true;
+      return false;
 
     case "tasks.create":
     case "tasks.assign":
@@ -139,9 +149,11 @@ function canUserPerform(user, action, resourceContext) {
       return false;
 
     case "events.create":
+      return role === "LEAD";
+
     case "events.update":
-      if (role === "LEAD") return true;
-      if (resourceContext && resourceContext.createdBy === userId) return true;
+      // A Lead can only update an event if they created it (VP and above already handled in rule 2)
+      if (role === "LEAD" && resourceContext && resourceContext.createdBy === userId) return true;
       return false;
 
     case "events.delete":

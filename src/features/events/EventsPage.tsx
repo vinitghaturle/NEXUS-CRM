@@ -153,6 +153,13 @@ export const EventsPage: React.FC = () => {
 
   const canManageEvents = role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN' || role === 'LEAD';
 
+  const canEditEvent = (event: EventItem | null) => {
+    if (!event) return false;
+    if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
+    if (role === 'LEAD' && event.createdBy && event.createdBy === myUserId) return true;
+    return false;
+  };
+
   const canDeleteEvent = (event: EventItem) => {
     if (role === 'PRESIDENT' || role === 'VP' || role === 'ADMIN') return true;
     if (event.createdBy && event.createdBy === myUserId) return true;
@@ -272,7 +279,7 @@ export const EventsPage: React.FC = () => {
             <ArrowLeft className="w-4 h-4" /> Back to Events
           </button>
 
-          {canManageEvents && (
+          {canEditEvent(selectedEvent) && (
             <button
               onClick={() => {
                 setEditingEvent(selectedEvent);
@@ -688,7 +695,7 @@ export const EventsPage: React.FC = () => {
                               >
                                 Command Center
                               </button>
-                              {canManageEvents && (
+                              {canEditEvent(event) && (
                                 <button
                                   onClick={() => {
                                     setEditingEvent(event);
